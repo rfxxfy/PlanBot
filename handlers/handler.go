@@ -11,6 +11,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
+// HandleCommand — основная функция обработки команд
 func HandleCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	userID := update.Message.From.ID
 	cmd := update.Message.Command()
@@ -43,6 +44,8 @@ func HandleCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	}
 }
 
+// handleAddTask - обрабатывает команду /add_task
+// Формат: /add_task НАЗВАНИЕ | ОПИСАНИЕ | ГГГГ-ММ-ДД
 func handleAddTask(bot *tgbotapi.BotAPI, chatID int64, userID int64, args string) {
 	parts := strings.SplitN(args, "|", 2)
 	if len(parts) < 2 {
@@ -68,6 +71,8 @@ func handleAddTask(bot *tgbotapi.BotAPI, chatID int64, userID int64, args string
 	}
 }
 
+// handleMyTasks - обрабатывает команду /my_tasks
+// Возвращает все задачи пользователя
 func handleMyTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
 	tasks, err := database.GetTasksByUserID(int64(userID))
 	if err != nil {
@@ -88,6 +93,8 @@ func handleMyTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
 	reply(bot, chatID, msg)
 }
 
+// handleTodayTasks - обрабатывает команду /today
+// Возвращает задачи, дедлайн которых на сегодня
 func handleTodayTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
 	tasks, err := database.GetTasksForToday(int64(userID))
 	if err != nil {
@@ -108,6 +115,8 @@ func handleTodayTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
 	reply(bot, chatID, msg)
 }
 
+// handleWeekTasks - обрабатывает команду /week
+// Возвращает задачи, дедлайн которых в ближайшие 7 дней
 func handleWeekTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
 	tasks, err := database.GetTasksForWeek(int64(userID))
 	if err != nil {
@@ -128,6 +137,8 @@ func handleWeekTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
 	reply(bot, chatID, msg)
 }
 
+// handleUpdateTask - обрабатывает команду /update_task
+// Формат: /update_task ID поле новое_значение (/update_task 1 status done, /update_task 1 deadline 2025-12-20)
 func handleUpdateTask(bot *tgbotapi.BotAPI, chatID int64, args string) {
 	parts := strings.Fields(args)
 	if len(parts) < 3 {
@@ -183,6 +194,8 @@ func handleUpdateTask(bot *tgbotapi.BotAPI, chatID int64, args string) {
 	}
 }
 
+// handleDeleteTask — обрабатывает команду /delete_task
+// Удаляет задачу по ID
 func handleDeleteTask(bot *tgbotapi.BotAPI, chatID int64, args string) {
 	id, err := strconv.ParseInt(args, 10, 64)
 	if err != nil || args == "" {
@@ -190,6 +203,7 @@ func handleDeleteTask(bot *tgbotapi.BotAPI, chatID int64, args string) {
 		return
 	}
 
+	// Удаляем задачу из БД
 	err = database.DeleteTask(id)
 	if err != nil {
 		log.Printf("Error deleting task: %v", err)
@@ -199,6 +213,7 @@ func handleDeleteTask(bot *tgbotapi.BotAPI, chatID int64, args string) {
 	}
 }
 
+// reply - вспомогательная функция для отправки сообщения пользователю
 func reply(bot *tgbotapi.BotAPI, chatID int64, text string) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	bot.Send(msg)

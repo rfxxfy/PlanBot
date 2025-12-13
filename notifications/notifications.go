@@ -10,12 +10,13 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
+// // Reminder - структура для хранения информации о напоминании
 type Reminder struct {
 	TaskID   int64
 	UserID   int64
 	Title    string
 	DueDate  time.Time
-	SentOnce bool // для однократного уведомления (если нужно)
+	SentOnce bool // для однократного уведомления
 }
 
 var (
@@ -24,6 +25,7 @@ var (
 	stopChan = make(chan bool)
 )
 
+// StartNotifications - запускает фоновую горутину, которая каждые 10 минут проверяет дедлайны
 func StartNotifications(b *tgbotapi.BotAPI) {
 	bot = b
 	go func() {
@@ -43,10 +45,12 @@ func StartNotifications(b *tgbotapi.BotAPI) {
 	log.Println("Reminder notifications started")
 }
 
+// StopNotifications - останавливает фоновую проверку уведомлений
 func StopNotifications() {
 	stopChan <- true
 }
 
+// SendReminders - основная функция, которая проверяет задачи и отправляет уведомления
 func SendReminders() {
 	now := time.Now()
 
@@ -89,6 +93,7 @@ func SendReminders() {
 	}
 }
 
+// getTasksByDueRange - возвращает задачи в диапазоне дат (от start до end), кроме выполненных
 func getTasksByDueRange(start, end time.Time) ([]*database.Task, error) {
 	query := `
 		SELECT id, user_id, title, due_date
@@ -114,6 +119,7 @@ func getTasksByDueRange(start, end time.Time) ([]*database.Task, error) {
 	return tasks, nil
 }
 
+// getOverdueTasks - возвращает просроченные задачи (дедлайн раньше текущего времени)
 func getOverdueTasks() ([]*database.Task, error) {
 	query := `
 		SELECT id, user_id, title, due_date
@@ -139,6 +145,7 @@ func getOverdueTasks() ([]*database.Task, error) {
 	return tasks, nil
 }
 
+// sendNotification - отправляет уведомление пользователю в Telegram
 func sendNotification(task *database.Task, message string) {
 	msg := tgbotapi.NewMessage(task.UserID, message)
 	_, err := bot.Send(msg)
