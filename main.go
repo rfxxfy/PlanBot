@@ -5,6 +5,8 @@ import (
 	"os"
 
 	"github.com/adkhorst/planbot/database"
+	"github.com/adkhorst/planbot/handlers"
+	"github.com/adkhorst/planbot/notifications"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/joho/godotenv"
 )
@@ -36,6 +38,8 @@ func main() {
 	bot.Debug = true
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
+	notifications.StartNotifications(bot)
+
 	// Configure updates
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
@@ -48,14 +52,8 @@ func main() {
 			continue
 		}
 
-		log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
-
-		// Respond with "hello" to any message
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "hello")
-		msg.ReplyToMessageID = update.Message.MessageID
-
-		if _, err := bot.Send(msg); err != nil {
-			log.Printf("Error sending message: %v", err)
+		if update.Message.IsCommand() {
+			handlers.HandleCommand(bot, update)
 		}
 	}
 }
