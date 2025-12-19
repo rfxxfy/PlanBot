@@ -1,0 +1,149 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Get version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build binaries
+        run: |
+          VERSION=${{ steps.get_version.outputs.VERSION }}
+          
+          # Linux AMD64
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build \
+            -ldflags="-s -w -X main.Version=$VERSION" \
+            -o bin/planbot-linux-amd64 main.go
+          
+          # Linux ARM64
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build \
+            -ldflags="-s -w -X main.Version=$VERSION" \
+            -o bin/planbot-linux-arm64 main.go
+          
+          # macOS AMD64
+          GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build \
+            -ldflags="-s -w -X main.Version=$VERSION" \
+            -o bin/planbot-darwin-amd64 main.go
+          
+          # macOS ARM64 (M1/M2)
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build \
+            -ldflags="-s -w -X main.Version=$VERSION" \
+            -o bin/planbot-darwin-arm64 main.go
+          
+          # Windows AMD64
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build \
+            -ldflags="-s -w -X main.Version=$VERSION" \
+            -o bin/planbot-windows-amd64.exe main.go
+
+      - name: Create checksums
+        run: |
+          cd bin
+          sha256sum * > checksums.txt
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --pretty=format:"- %s" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ steps.get_version.outputs.VERSION }}
+          body: |
+            ## What's Changed
+            ${{ steps.changelog.outputs.CHANGELOG }}
+            
+            ## Installation
+            Download the appropriate binary for your platform:
+            - **Linux (AMD64)**: `planbot-linux-amd64`
+            - **Linux (ARM64)**: `planbot-linux-arm64`
+            - **macOS (Intel)**: `planbot-darwin-amd64`
+            - **macOS (M1/M2)**: `planbot-darwin-arm64`
+            - **Windows**: `planbot-windows-amd64.exe`
+            
+            Verify checksums with `checksums.txt`
+            
+            ## Docker
+            ```bash
+            docker pull ghcr.io/${{ github.repository }}:${{ steps.get_version.outputs.VERSION }}
+            ```
+          files: |
+            bin/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker-release:
+    name: Push Docker Image
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: secrets.DOCKER_USERNAME != ''
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ secrets.DOCKER_USERNAME }}/planbot
+            ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+

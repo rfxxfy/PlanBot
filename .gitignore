@@ -5,11 +5,17 @@
 *.so
 *.dylib
 
+# Binary name
+planbot
+planbot-*
+
 # Test binary, built with `go test -c`
 *.test
 
 # Output of the go coverage tool
 *.out
+coverage.out
+coverage.html
 
 # Dependency directories
 vendor/
@@ -19,17 +25,65 @@ go.work
 
 # Environment variables
 .env
+.env.local
+.env.*.local
 
-# IDE specific files
+# IDE - VSCode
 .vscode/
+*.code-workspace
+
+# IDE - JetBrains
 .idea/
+*.iml
+*.iws
+*.ipr
+
+# IDE - Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Database files (local)
+*.db
+*.sqlite
+*.sqlite3
+
+# Build directories
+bin/
+dist/
+build/
+out/
+
+# Air (hot reload) temporary files
+tmp/
+
+# Backup files
+*.bak
 *.swp
 *.swo
 *~
 
-# OS specific files
-.DS_Store
-Thumbs.db
+# Docker volumes (if created locally)
+postgres_data/
 
-# Binary output
-planbot
+# Test data (optional, uncomment if needed)
+# database/test_data.sql

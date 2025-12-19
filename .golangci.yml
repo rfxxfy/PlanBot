@@ -1,0 +1,104 @@
+# GolangCI-Lint configuration
+# https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 5m
+  tests: true
+  skip-dirs:
+    - tmp
+    - vendor
+    - testdata
+  skip-files:
+    - ".*\\.pb\\.go$"
+
+linters:
+  enable:
+    - errcheck      # Check for unchecked errors
+    - gosimple      # Simplify code
+    - govet         # Go vet
+    - ineffassign   # Detect ineffectual assignments
+    - staticcheck   # Static analysis
+    - unused        # Check for unused code
+    - gofmt         # Check formatting
+    - goimports     # Check imports
+    - misspell      # Check spelling
+    - revive        # Flexible linter
+    - gosec         # Security checks
+    - gocritic      # Opinionated checks
+    - unparam       # Unused function parameters
+    - unconvert     # Unnecessary type conversions
+    - prealloc      # Preallocate slices
+    - nolintlint    # Proper nolint usage
+
+  disable:
+    - typecheck     # Can be slow
+    - exhaustive    # Too strict for switches
+    - exhaustruct   # Too strict for structs
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  
+  govet:
+    check-shadowing: true
+  
+  gofmt:
+    simplify: true
+  
+  goimports:
+    local-prefixes: github.com/adkhorst/planbot
+  
+  revive:
+    rules:
+      - name: exported
+        disabled: false
+      - name: package-comments
+        disabled: true
+      - name: unexported-return
+        disabled: true
+  
+  gosec:
+    excludes:
+      - G404  # Use of weak random number generator (ok for non-crypto)
+  
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+      - style
+    disabled-checks:
+      - commentFormatting
+      - whyNoLint
+  
+  misspell:
+    locale: US
+    ignore-words:
+      - cancelled
+
+issues:
+  exclude-use-default: false
+  exclude-rules:
+    # Exclude some linters from running on tests
+    - path: _test\.go
+      linters:
+        - gosec
+        - gocritic
+        - unparam
+    
+    # Ignore long lines with go:generate
+    - linters:
+        - revive
+      text: "line-length-limit"
+      source: "^//go:generate "
+  
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  sort-results: true
+
