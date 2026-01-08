@@ -87,7 +87,10 @@ func handleMyTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
 
 	var msg string
 	for i, t := range tasks {
-		due := t.DueDate.Format("02.01.2006")
+		due := "нет дедлайна"
+		if t.Deadline != nil {
+			due = t.Deadline.Format("02.01.2006")
+		}
 		msg += fmt.Sprintf("%d. [%s] %s (до %s)\n", i+1, t.Status, t.Title, due)
 	}
 	reply(bot, chatID, msg)
@@ -109,7 +112,10 @@ func handleTodayTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
 
 	var msg string
 	for i, t := range tasks {
-		due := t.DueDate.Format("15:04")
+		due := "нет дедлайна"
+		if t.Deadline != nil {
+			due = t.Deadline.Format("15:04")
+		}
 		msg += fmt.Sprintf("%d. [%s] %s (до %s)\n", i+1, t.Status, t.Title, due)
 	}
 	reply(bot, chatID, msg)
@@ -131,7 +137,10 @@ func handleWeekTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
 
 	var msg string
 	for i, t := range tasks {
-		due := t.DueDate.Format("02.01 15:04")
+		due := "нет дедлайна"
+		if t.Deadline != nil {
+			due = t.Deadline.Format("02.01 15:04")
+		}
 		msg += fmt.Sprintf("%d. [%s] %s (до %s)\n", i+1, t.Status, t.Title, due)
 	}
 	reply(bot, chatID, msg)

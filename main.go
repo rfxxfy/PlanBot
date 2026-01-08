@@ -6,6 +6,7 @@ import (
 
 	"github.com/adkhorst/planbot/database"
 	"github.com/adkhorst/planbot/handlers"
+	"github.com/adkhorst/planbot/health"
 	"github.com/adkhorst/planbot/notifications"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/joho/godotenv"

@@ -10,12 +10,12 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-// // Reminder - структура для хранения информации о напоминании
+// Reminder - структура для хранения информации о напоминании
 type Reminder struct {
 	TaskID   int64
 	UserID   int64
 	Title    string
-	DueDate  time.Time
+	Deadline time.Time
 	SentOnce bool // для однократного уведомления
 }
 
@@ -58,12 +58,12 @@ func SendReminders() {
 	tomorrowStart := now.AddDate(0, 0, 1).Truncate(24 * time.Hour)
 	tomorrowEnd := tomorrowStart.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
 
-	soonTasks, err := getTasksByDueRange(tomorrowStart, tomorrowEnd)
+	soonTasks, err := getTasksByDeadlineRange(tomorrowStart, tomorrowEnd)
 	if err != nil {
 		log.Printf("Error fetching tomorrow tasks: %v", err)
 	} else {
 		for _, t := range soonTasks {
-			sendNotification(t, fmt.Sprintf("⏰ Напоминаю: задача \"%s\" истекает завтра (%s)", t.Title, t.DueDate.Format("02.01.2006")))
+			sendNotification(t, fmt.Sprintf("⏰ Напоминаю: задача \"%s\" истекает завтра (%s)", t.Title, t.Deadline.Format("02.01.2006")))
 		}
 	}
 
@@ -72,12 +72,12 @@ func SendReminders() {
 		todayStart := now.Truncate(24 * time.Hour)
 		todayEnd := todayStart.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
 
-		todayTasks, err := getTasksByDueRange(todayStart, todayEnd)
+		todayTasks, err := getTasksByDeadlineRange(todayStart, todayEnd)
 		if err != nil {
 			log.Printf("Error fetching today tasks: %v", err)
 		} else {
 			for _, t := range todayTasks {
-				sendNotification(t, fmt.Sprintf("⚠️ Задача \"%s\" сегодня дедлайн! (%s)", t.Title, t.DueDate.Format("02.01.2006")))
+				sendNotification(t, fmt.Sprintf("⚠️ Задача \"%s\" сегодня дедлайн! (%s)", t.Title, t.Deadline.Format("02.01.2006")))
 			}
 		}
 	}
@@ -88,18 +88,18 @@ func SendReminders() {
 		log.Printf("Error fetching overdue tasks: %v", err)
 	} else {
 		for _, t := range overdueTasks {
-			sendNotification(t, fmt.Sprintf("❌ Задача \"%s\" просрочена! (была до %s)", t.Title, t.DueDate.Format("02.01.2006")))
+			sendNotification(t, fmt.Sprintf("❌ Задача \"%s\" просрочена! (была до %s)", t.Title, t.Deadline.Format("02.01.2006")))
 		}
 	}
 }
 
-// getTasksByDueRange - возвращает задачи в диапазоне дат (от start до end), кроме выполненных
-func getTasksByDueRange(start, end time.Time) ([]*database.Task, error) {
+// getTasksByDeadlineRange - возвращает задачи в диапазоне дат (от start до end), кроме выполненных
+func getTasksByDeadlineRange(start, end time.Time) ([]*database.Task, error) {
 	query := `
-		SELECT id, user_id, title, due_date
+		SELECT id, user_id, title, deadline
 		FROM tasks
-		WHERE due_date BETWEEN $1 AND $2 AND status != 'done'
-		ORDER BY due_date ASC`
+		WHERE deadline BETWEEN $1 AND $2 AND status != 'completed'
+		ORDER BY deadline ASC`
 
 	rows, err := database.DB.Query(query, start, end)
 	if err != nil {
@@ -110,7 +110,7 @@ func getTasksByDueRange(start, end time.Time) ([]*database.Task, error) {
 	var tasks []*database.Task
 	for rows.Next() {
 		task := &database.Task{}
-		err := rows.Scan(&task.ID, &task.UserID, &task.Title, &task.DueDate)
+		err := rows.Scan(&task.ID, &task.UserID, &task.Title, &task.Deadline)
 		if err != nil {
 			return nil, err
 		}
@@ -122,10 +122,10 @@ func getTasksByDueRange(start, end time.Time) ([]*database.Task, error) {
 // getOverdueTasks - возвращает просроченные задачи (дедлайн раньше текущего времени)
 func getOverdueTasks() ([]*database.Task, error) {
 	query := `
-		SELECT id, user_id, title, due_date
+		SELECT id, user_id, title, deadline
 		FROM tasks
-		WHERE due_date < CURRENT_TIMESTAMP AND status != 'done'
-		ORDER BY due_date ASC`
+		WHERE deadline < CURRENT_TIMESTAMP AND status != 'completed'
+		ORDER BY deadline ASC`
 
 	rows, err := database.DB.Query(query)
 	if err != nil {
@@ -136,7 +136,7 @@ func getOverdueTasks() ([]*database.Task, error) {
 	var tasks []*database.Task
 	for rows.Next() {
 		task := &database.Task{}
-		err := rows.Scan(&task.ID, &task.UserID, &task.Title, &task.DueDate)
+		err := rows.Scan(&task.ID, &task.UserID, &task.Title, &task.Deadline)
 		if err != nil {
 			return nil, err
 		}

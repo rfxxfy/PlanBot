@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"math"
 	"sort"
 	"time"
 
@@ -186,11 +187,17 @@ func (s *Scheduler) scheduleTask(task models.Task, startDate time.Time, daySlots
 
 // calculateLatestStartDate calculates the latest date a task can start
 func (s *Scheduler) calculateLatestStartDate(deadline time.Time, hoursRequired float64) time.Time {
-	workDaysNeeded := int(hoursRequired/s.user.DailyCapacity) + 1
+	// Правильное вычисление необходимого количества рабочих дней
+	// Используем math.Ceil для округления вверх
+	workDaysNeeded := int(math.Ceil(hoursRequired / s.user.DailyCapacity))
+	if workDaysNeeded < 1 {
+		workDaysNeeded = 1 // Минимум один день
+	}
+
 	date := deadline
 	workDaysFound := 0
 
-	// Go backwards from deadline
+	// Идем назад от дедлайна, считая только рабочие дни
 	for workDaysFound < workDaysNeeded {
 		date = date.AddDate(0, 0, -1)
 		if s.isWorkDay(date) {

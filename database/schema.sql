@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- Tasks table
 CREATE TABLE IF NOT EXISTS tasks (
     id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL,
     title VARCHAR(500) NOT NULL,
     description TEXT,
     hours_required DECIMAL(5,2) NOT NULL, -- hours needed to complete
@@ -23,16 +23,18 @@ CREATE TABLE IF NOT EXISTS tasks (
     deadline TIMESTAMP, -- hard deadline
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    completed_at TIMESTAMP
+    completed_at TIMESTAMP,
+    CONSTRAINT fk_tasks_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Task schedules table (tracks when tasks are scheduled)
 CREATE TABLE IF NOT EXISTS task_schedules (
     id BIGSERIAL PRIMARY KEY,
-    task_id BIGINT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    task_id BIGINT NOT NULL,
     scheduled_date DATE NOT NULL, -- which day
     hours_allocated DECIMAL(5,2) NOT NULL, -- how many hours on this day
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_task_schedules_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
 
 -- Indexes for better performance
