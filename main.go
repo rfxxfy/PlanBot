@@ -11,7 +11,12 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// Version is set during build with -ldflags
+var Version = "dev"
+
 func main() {
+	log.Printf("PlanBot version %s starting...", Version)
+
 	// Load environment variables
 	if err := godotenv.Load(); err != nil {
 		log.Println("Warning: .env file not found, using system environment variables")
@@ -22,6 +27,15 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	defer database.CloseDB()
+
+	// Start health check server
+	healthPort := os.Getenv("HEALTH_PORT")
+	if healthPort == "" {
+		healthPort = "8080"
+	}
+	healthServer := health.NewServer(healthPort, Version)
+	healthServer.Start()
+	log.Printf("Health check server running on port %s", healthPort)
 
 	// Get bot token from environment
 	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
@@ -35,7 +49,7 @@ func main() {
 		log.Fatalf("Failed to create bot: %v", err)
 	}
 
-	bot.Debug = true
+	bot.Debug = os.Getenv("BOT_DEBUG") == "true"
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
 	// Start notifications
@@ -46,6 +60,8 @@ func main() {
 	u.Timeout = 60
 
 	updates := bot.GetUpdatesChan(u)
+
+	log.Println("Bot is running... Press Ctrl+C to stop")
 
 	// Handle incoming messages
 	for update := range updates {

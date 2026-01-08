@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: planbot-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-planbot}
+      POSTGRES_USER: ${DB_USER:-planbot}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-planbot_secret}
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=en_US.UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/test_data.sql:/docker-entrypoint-initdb.d/02-test-data.sql:ro
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    networks:
+      - planbot-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-planbot} -d ${DB_NAME:-planbot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # PlanBot Application
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-latest}
+    container_name: planbot-app
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-planbot}
+      DB_PASSWORD: ${DB_PASSWORD:-planbot_secret}
+      DB_NAME: ${DB_NAME:-planbot}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+      TZ: ${TZ:-Europe/Moscow}
+    ports:
+      - "8080:8080"
+    networks:
+      - planbot-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Adminer - Database Management (optional, for development)
+  adminer:
+    image: adminer:latest
+    container_name: planbot-adminer
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports:
+      - "8081:8080"
+    networks:
+      - planbot-network
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    profiles:
+      - dev
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  planbot-network:
+    driver: bridge
+
