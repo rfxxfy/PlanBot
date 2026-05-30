@@ -199,10 +199,13 @@ func (s *Scheduler) calculateLatestStartDate(deadline time.Time, hoursRequired f
 	}
 
 	// Use ceiling to calculate exact number of required work days.
-	// Дедлайн считаем включительно, поэтому:
-	// - deadline сам считается рабочим днём №1 (если он рабочий),
-	// - затем двигаемся назад, пока не наберём нужное количество рабочих дней.
+	// Дедлайн считаем включительно: deadline — рабочий день №1 (если он рабочий),
+	// затем двигаемся назад, пока не наберём нужное количество рабочих дней.
 	workDaysNeeded := int(math.Ceil(hoursRequired / s.user.DailyCapacity))
+	if workDaysNeeded < 1 {
+		workDaysNeeded = 1
+	}
+
 	date := deadline
 
 	// Если дедлайн не рабочий день, отступаем назад до ближайшего рабочего.
@@ -212,7 +215,6 @@ func (s *Scheduler) calculateLatestStartDate(deadline time.Time, hoursRequired f
 
 	workDaysFound := 1
 
-	// Go backwards from adjusted deadline
 	for workDaysFound < workDaysNeeded {
 		date = date.AddDate(0, 0, -1)
 		if s.isWorkDay(date) {
