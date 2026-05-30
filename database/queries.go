@@ -7,6 +7,7 @@ import (
 
 	"github.com/adkhorst/planbot/models"
 	"github.com/lib/pq"
+	"golang.org/x/oauth2"
 )
 
 // GetOrCreateUser gets existing user or creates a new one
@@ -14,7 +15,7 @@ func GetOrCreateUser(telegramID int64, username, firstName, lastName string) (*m
 	user := &models.User{}
 
 	// Try to get existing user
-	query := `SELECT id, telegram_id, username, first_name, last_name, daily_capacity, work_days, created_at, updated_at
+	query := `SELECT id, telegram_id, username, first_name, last_name, time_zone, work_start, work_end, daily_capacity, work_days, created_at, updated_at
 			  FROM users WHERE telegram_id = $1`
 
 	var workDays pq.Int64Array
@@ -24,6 +25,9 @@ func GetOrCreateUser(telegramID int64, username, firstName, lastName string) (*m
 		&user.Username,
 		&user.FirstName,
 		&user.LastName,
+		&user.TimeZone,
+		&user.WorkStart,
+		&user.WorkEnd,
 		&user.DailyCapacity,
 		&workDays,
 		&user.CreatedAt,
@@ -34,7 +38,7 @@ func GetOrCreateUser(telegramID int64, username, firstName, lastName string) (*m
 		// Create new user
 		insertQuery := `INSERT INTO users (telegram_id, username, first_name, last_name)
 						VALUES ($1, $2, $3, $4)
-						RETURNING id, telegram_id, username, first_name, last_name, daily_capacity, work_days, created_at, updated_at`
+						RETURNING id, telegram_id, username, first_name, last_name, time_zone, work_start, work_end, daily_capacity, work_days, created_at, updated_at`
 
 		err = DB.QueryRow(insertQuery, telegramID, username, firstName, lastName).Scan(
 			&user.ID,
@@ -42,6 +46,9 @@ func GetOrCreateUser(telegramID int64, username, firstName, lastName string) (*m
 			&user.Username,
 			&user.FirstName,
 			&user.LastName,
+			&user.TimeZone,
+			&user.WorkStart,
+			&user.WorkEnd,
 			&user.DailyCapacity,
 			&workDays,
 			&user.CreatedAt,
@@ -63,20 +70,33 @@ func GetOrCreateUser(telegramID int64, username, firstName, lastName string) (*m
 	return user, nil
 }
 
-// UpdateUserSettings updates user's daily capacity and work days
-func UpdateUserSettings(userID int64, dailyCapacity float64, workDays []int) error {
+// UpdateUserSettings updates user's daily capacity, work days and work hours
+func UpdateUserSettings(userID int64, dailyCapacity float64, workDays []int, workStart, workEnd string) error {
 	// Convert []int to pq.Int64Array
 	workDaysArray := make(pq.Int64Array, len(workDays))
 	for i, v := range workDays {
 		workDaysArray[i] = int64(v)
 	}
 
-	query := `UPDATE users SET daily_capacity = $1, work_days = $2, updated_at = NOW()
-			  WHERE id = $3`
+	query := `UPDATE users SET daily_capacity = $1, work_days = $2, work_start = $3, work_end = $4, updated_at = NOW()
+			  WHERE id = $5`
 
-	_, err := DB.Exec(query, dailyCapacity, workDaysArray, userID)
+	_, err := DB.Exec(query, dailyCapacity, workDaysArray, workStart, workEnd, userID)
 	if err != nil {
 		return fmt.Errorf("failed to update user settings: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateUserTimeZone updates user's time zone
+func UpdateUserTimeZone(userID int64, timeZone string) error {
+	query := `UPDATE users SET time_zone = $1, updated_at = NOW()
+			  WHERE id = $2`
+
+	_, err := DB.Exec(query, timeZone, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update user time zone: %w", err)
 	}
 
 	return nil
@@ -172,6 +192,48 @@ func GetPendingTasks(userID int64) ([]models.Task, error) {
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan task: %w", err)
+		}
+		tasks = append(tasks, task)
+	}
+
+	return tasks, nil
+}
+
+// GetActiveTasks returns tasks that should participate in (re)planning.
+// "Hard" rescheduling treats all non-completed / non-cancelled tasks as current.
+func GetActiveTasks(userID int64) ([]models.Task, error) {
+	query := `
+		SELECT id, user_id, title, description, hours_required, priority, status, deadline,
+			   created_at, updated_at, completed_at
+		FROM tasks
+		WHERE user_id = $1 AND status NOT IN ('completed', 'cancelled')
+		ORDER BY priority DESC, deadline ASC NULLS LAST
+	`
+
+	rows, err := DB.Query(query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query active tasks: %w", err)
+	}
+	defer rows.Close()
+
+	tasks := []models.Task{}
+	for rows.Next() {
+		task := models.Task{}
+		err := rows.Scan(
+			&task.ID,
+			&task.UserID,
+			&task.Title,
+			&task.Description,
+			&task.HoursRequired,
+			&task.Priority,
+			&task.Status,
+			&task.Deadline,
+			&task.CreatedAt,
+			&task.UpdatedAt,
+			&task.CompletedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan active task: %w", err)
 		}
 		tasks = append(tasks, task)
 	}
@@ -335,4 +397,49 @@ func GetScheduleForDateRange(userID int64, startDate, endDate time.Time) ([]mode
 	}
 
 	return schedules, nil
+}
+
+// GetGoogleToken returns stored Google OAuth token for user.
+func GetGoogleToken(userID int64) (*models.GoogleToken, error) {
+	query := `SELECT user_id, access_token, refresh_token, expiry, created_at, updated_at
+	          FROM user_google_tokens WHERE user_id = $1`
+
+	tok := &models.GoogleToken{}
+	err := DB.QueryRow(query, userID).Scan(
+		&tok.UserID,
+		&tok.AccessToken,
+		&tok.RefreshToken,
+		&tok.Expiry,
+		&tok.CreatedAt,
+		&tok.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get google token: %w", err)
+	}
+	return tok, nil
+}
+
+// SaveGoogleToken upserts user's Google OAuth token.
+func SaveGoogleToken(userID int64, token *oauth2.Token) error {
+	if token == nil {
+		return fmt.Errorf("nil token")
+	}
+	query := `
+		INSERT INTO user_google_tokens (user_id, access_token, refresh_token, expiry, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, NOW(), NOW())
+		ON CONFLICT (user_id) DO UPDATE
+		SET access_token = EXCLUDED.access_token,
+		    refresh_token = EXCLUDED.refresh_token,
+		    expiry = EXCLUDED.expiry,
+		    updated_at = NOW()
+	`
+
+	_, err := DB.Exec(query, userID, token.AccessToken, token.RefreshToken, token.Expiry)
+	if err != nil {
+		return fmt.Errorf("failed to save google token: %w", err)
+	}
+	return nil
 }
