@@ -15,6 +15,7 @@ type Scheduler struct {
 	user                *models.User
 	tasks               []models.Task
 	planningHorizonDays int
+	workSlots           []models.TimeSlot // optional grid with calendar busy blocks
 }
 
 // NewScheduler creates a new scheduler instance
@@ -31,6 +32,13 @@ func NewScheduler(user *models.User, tasks []models.Task) *Scheduler {
 		tasks:               tasks,
 		planningHorizonDays: horizon,
 	}
+}
+
+// NewSchedulerWithSlots creates a scheduler that respects pre-built work slots (incl. calendar busy).
+func NewSchedulerWithSlots(user *models.User, tasks []models.Task, workSlots []models.TimeSlot) *Scheduler {
+	s := NewScheduler(user, tasks)
+	s.workSlots = workSlots
+	return s
 }
 
 // Schedule distributes tasks across days using deadline-aware algorithm
@@ -161,17 +169,31 @@ func (s *Scheduler) scheduleTask(task models.Task, startDate time.Time, daySlots
 			daySlots[dateKey] = daySlot
 		}
 
-		// Calculate available hours for this day
+		// Calculate available hours for this day (capacity, already planned, and calendar busy).
 		availableHours := s.user.DailyCapacity - daySlot.TotalHours
+		if len(s.workSlots) > 0 {
+			slotFree := FreeHoursOnDate(s.workSlots, dateKey)
+			if slotFree < availableHours {
+				availableHours = slotFree
+			}
+		}
 
-		if availableHours > 0 {
-			// Allocate as much as possible to this day
+		if availableHours > 1e-9 {
 			hoursToAllocate := remainingHours
 			if hoursToAllocate > availableHours {
 				hoursToAllocate = availableHours
 			}
 
-			// Add task to this day
+			// With a slot grid (calendar + prior tasks), place only into real free windows.
+			if len(s.workSlots) > 0 {
+				hoursToAllocate = allocateOnSlots(s.workSlots, dateKey, hoursToAllocate)
+				if hoursToAllocate <= 1e-9 {
+					currentDate = currentDate.AddDate(0, 0, 1)
+					daysChecked++
+					continue
+				}
+			}
+
 			daySlot.Tasks = append(daySlot.Tasks, models.ScheduledTaskInfo{
 				TaskID:         task.ID,
 				Title:          task.Title,
@@ -181,7 +203,6 @@ func (s *Scheduler) scheduleTask(task models.Task, startDate time.Time, daySlots
 			})
 			daySlot.TotalHours += hoursToAllocate
 			daySlot.AvailableHours = s.user.DailyCapacity - daySlot.TotalHours
-
 			remainingHours -= hoursToAllocate
 		}
 
@@ -199,13 +220,10 @@ func (s *Scheduler) calculateLatestStartDate(deadline time.Time, hoursRequired f
 	}
 
 	// Use ceiling to calculate exact number of required work days.
-	// Дедлайн считаем включительно: deadline — рабочий день №1 (если он рабочий),
-	// затем двигаемся назад, пока не наберём нужное количество рабочих дней.
+	// Дедлайн считаем включительно, поэтому:
+	// - deadline сам считается рабочим днём №1 (если он рабочий),
+	// - затем двигаемся назад, пока не наберём нужное количество рабочих дней.
 	workDaysNeeded := int(math.Ceil(hoursRequired / s.user.DailyCapacity))
-	if workDaysNeeded < 1 {
-		workDaysNeeded = 1
-	}
-
 	date := deadline
 
 	// Если дедлайн не рабочий день, отступаем назад до ближайшего рабочего.
@@ -215,6 +233,7 @@ func (s *Scheduler) calculateLatestStartDate(deadline time.Time, hoursRequired f
 
 	workDaysFound := 1
 
+	// Go backwards from adjusted deadline
 	for workDaysFound < workDaysNeeded {
 		date = date.AddDate(0, 0, -1)
 		if s.isWorkDay(date) {

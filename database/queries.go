@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/adkhorst/planbot/models"
@@ -342,6 +343,62 @@ func SaveTaskSchedules(schedules []models.DaySchedule) error {
 	return nil
 }
 
+// GetTaskByIDForUser returns a task if it belongs to the user.
+func GetTaskByIDForUser(taskID, userID int64) (*models.Task, error) {
+	query := `SELECT id, user_id, title, description, hours_required, priority, status, deadline, created_at, updated_at, completed_at
+			  FROM tasks WHERE id = $1 AND user_id = $2`
+
+	task := &models.Task{}
+	err := DB.QueryRow(query, taskID, userID).Scan(
+		&task.ID,
+		&task.UserID,
+		&task.Title,
+		&task.Description,
+		&task.HoursRequired,
+		&task.Priority,
+		&task.Status,
+		&task.Deadline,
+		&task.CreatedAt,
+		&task.UpdatedAt,
+		&task.CompletedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get task: %w", err)
+	}
+	return task, nil
+}
+
+// UserHasScheduledTasks reports whether the user already has entries in task_schedules.
+func UserHasScheduledTasks(userID int64) (bool, error) {
+	var exists bool
+	query := `SELECT EXISTS(
+		SELECT 1 FROM task_schedules ts
+		JOIN tasks t ON t.id = ts.task_id
+		WHERE t.user_id = $1 AND t.status NOT IN ('completed', 'cancelled')
+	)`
+	err := DB.QueryRow(query, userID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check scheduled tasks: %w", err)
+	}
+	return exists, nil
+}
+
+// GetAllUserSchedulesFrom returns all saved day schedules from the given date onward.
+func GetAllUserSchedulesFrom(userID int64, fromDate time.Time) ([]models.DaySchedule, error) {
+	horizonEnd := fromDate.AddDate(0, 0, 366)
+	schedules, err := GetScheduleForDateRange(userID, fromDate, horizonEnd)
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(schedules, func(i, j int) bool {
+		return schedules[i].Date.Before(schedules[j].Date)
+	})
+	return schedules, nil
+}
+
 // GetScheduleForDateRange retrieves schedule for a date range
 func GetScheduleForDateRange(userID int64, startDate, endDate time.Time) ([]models.DaySchedule, error) {
 	query := `SELECT ts.scheduled_date, ts.task_id, t.title, ts.hours_allocated, t.priority, t.deadline
@@ -442,4 +499,70 @@ func SaveGoogleToken(userID int64, token *oauth2.Token) error {
 		return fmt.Errorf("failed to save google token: %w", err)
 	}
 	return nil
+}
+
+// GetGoogleCalendarEventIDs returns stored Google event IDs for a user.
+func GetGoogleCalendarEventIDs(userID int64) ([]string, error) {
+	rows, err := DB.Query(`SELECT google_event_id FROM google_calendar_events WHERE user_id = $1 AND source = 'planbot'`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list google events: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("failed to scan google event id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// ClearGoogleCalendarEvents removes stored event metadata for a user.
+func ClearGoogleCalendarEvents(userID int64) error {
+	_, err := DB.Exec(`DELETE FROM google_calendar_events WHERE user_id = $1 AND source = 'planbot'`, userID)
+	if err != nil {
+		return fmt.Errorf("failed to clear google events: %w", err)
+	}
+	return nil
+}
+
+// SaveGoogleCalendarEvents stores exported Google Calendar event IDs.
+func SaveGoogleCalendarEvents(userID int64, events []models.GoogleCalendarEvent) error {
+	if len(events) == 0 {
+		return nil
+	}
+
+	tx, err := DB.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`INSERT INTO google_calendar_events (user_id, google_event_id, task_id, source, start_time, end_time)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (user_id, google_event_id) DO UPDATE
+		SET task_id = EXCLUDED.task_id,
+		    source = EXCLUDED.source,
+		    start_time = EXCLUDED.start_time,
+		    end_time = EXCLUDED.end_time`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare google events insert: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, ev := range events {
+		source := ev.Source
+		if source == "" {
+			source = "planbot"
+		}
+		_, err := stmt.Exec(userID, ev.GoogleEventID, ev.TaskID, source, ev.StartTime, ev.EndTime)
+		if err != nil {
+			return fmt.Errorf("failed to insert google event: %w", err)
+		}
+	}
+
+	return tx.Commit()
 }

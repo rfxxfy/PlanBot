@@ -7,7 +7,6 @@ import (
 	"github.com/adkhorst/planbot/database"
 	"github.com/adkhorst/planbot/handlers"
 	"github.com/adkhorst/planbot/health"
-	"github.com/adkhorst/planbot/notifications"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/joho/godotenv"
 )
@@ -53,8 +52,8 @@ func main() {
 	bot.Debug = os.Getenv("BOT_DEBUG") == "true"
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
-	// Start notifications
-	notifications.StartNotifications(bot)
+	// Create bot handler
+	handler := handlers.NewBotHandler(bot)
 
 	// Configure updates
 	u := tgbotapi.NewUpdate(0)
@@ -66,12 +65,6 @@ func main() {
 
 	// Handle incoming messages
 	for update := range updates {
-		if update.Message == nil {
-			continue
-		}
-
-		if update.Message.IsCommand() {
-			handlers.HandleCommand(bot, update)
-		}
+		handler.HandleUpdate(update)
 	}
 }
