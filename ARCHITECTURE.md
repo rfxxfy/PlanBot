@@ -296,7 +296,7 @@ flowchart TB
 | `incremental.go` | `ScheduleTaskIntoExisting` | Одна задача в существующий план |
 
 **Алгоритм:** Deadline-Aware Hybrid Scheduling · **O(N × D)**  
-Подробнее: [ALGORITHM_EXPLANATION.md](./ALGORITHM_EXPLANATION.md)
+Подробнее: [ALGORITHM.md](./ALGORITHM.md)
 
 ### Переменные окружения планировщика
 
@@ -539,8 +539,7 @@ make test
 | Документ | Содержание |
 |----------|------------|
 | [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) | ER-диаграмма, таблицы, SQL |
-| [ALGORITHM_EXPLANATION.md](./ALGORITHM_EXPLANATION.md) | Алгоритм планирования |
-| [ALGORITHM.md](./ALGORITHM.md) | Детальное описание алгоритма |
+| [ALGORITHM.md](./ALGORITHM.md) | Алгоритм планирования (полное описание) |
 | [README.md](./README.md) | Установка, команды, Makefile |
 | [docs/presentation.html](./docs/presentation.html) | Презентация проекта |
 
