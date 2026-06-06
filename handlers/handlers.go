@@ -17,7 +17,7 @@ import (
 	"github.com/adkhorst/planbot/scheduler"
 )
 
-// Bot context for handlers
+// BotHandler routes Telegram updates to command handlers.
 type BotHandler struct {
 	bot *tgbotapi.BotAPI
 }
@@ -28,7 +28,7 @@ func NewBotHandler(bot *tgbotapi.BotAPI) *BotHandler {
 }
 
 // HandleUpdate processes incoming updates
-func (h *BotHandler) HandleUpdate(update tgbotapi.Update) {
+func (h *BotHandler) HandleUpdate(update *tgbotapi.Update) {
 	// Handle inline callbacks (buttons)
 	if update.CallbackQuery != nil {
 		h.handleCallback(update.CallbackQuery)
@@ -309,7 +309,8 @@ func (h *BotHandler) handleMyTasks(msg *tgbotapi.Message) {
 	}
 
 	response := "📋 Ваши задачи:\n\n"
-	for _, task := range tasks {
+	for i := range tasks {
+		task := tasks[i]
 		statusEmoji := getStatusEmoji(task.Status)
 		response += fmt.Sprintf("%s ID:%d | %s\n⏱ %g ч | ⭐️ %d",
 			statusEmoji, task.ID, task.Title, task.HoursRequired, task.Priority)

@@ -103,9 +103,10 @@ func (c *Client) DeleteEventByID(ctx context.Context, calendarID, eventID string
 	return err
 }
 
-func eventTimeRange(ev *calendar.Event, loc *time.Location) (time.Time, time.Time, bool, bool) {
+func eventTimeRange(ev *calendar.Event, loc *time.Location) (start, end time.Time, allDay, ok bool) {
 	if ev.Start != nil && ev.Start.Date != "" {
-		start, err := time.ParseInLocation("2006-01-02", ev.Start.Date, loc)
+		var err error
+		start, err = time.ParseInLocation("2006-01-02", ev.Start.Date, loc)
 		if err != nil {
 			return time.Time{}, time.Time{}, false, false
 		}
@@ -120,11 +121,12 @@ func eventTimeRange(ev *calendar.Event, loc *time.Location) (time.Time, time.Tim
 	if ev.Start == nil || ev.Start.DateTime == "" || ev.End == nil || ev.End.DateTime == "" {
 		return time.Time{}, time.Time{}, false, false
 	}
-	start, err := parseEventDateTime(ev.Start, loc)
+	var err error
+	start, err = parseEventDateTime(ev.Start, loc)
 	if err != nil {
 		return time.Time{}, time.Time{}, false, false
 	}
-	end, err := parseEventDateTime(ev.End, loc)
+	end, err = parseEventDateTime(ev.End, loc)
 	if err != nil {
 		return time.Time{}, time.Time{}, false, false
 	}

@@ -79,7 +79,9 @@ func TestHorizonEndDate(t *testing.T) {
 	if !end.Equal(want) {
 		t.Errorf("HorizonEndDate() = %v, want %v", end, want)
 	}
-	os.Unsetenv("PLANNING_HORIZON_DAYS")
+	if err := os.Unsetenv("PLANNING_HORIZON_DAYS"); err != nil {
+		t.Logf("unsetenv: %v", err)
+	}
 }
 
 func TestSlotScheduler_BuildDailySlots_SkipsWeekend(t *testing.T) {

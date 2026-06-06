@@ -13,7 +13,7 @@ import (
 )
 
 // HandleCommand — основная функция обработки команд
-func HandleCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+func HandleCommand(bot *tgbotapi.BotAPI, update *tgbotapi.Update) {
 	userID := update.Message.From.ID
 	cmd := update.Message.Command()
 	args := update.Message.CommandArguments()
@@ -63,7 +63,7 @@ func handleAddTask(bot *tgbotapi.BotAPI, chatID int64, userID int64, args string
 		return
 	}
 
-	err = database.CreateTaskWithDeadline(int64(userID), title, desc, 0, dueDate)
+	err = database.CreateTaskWithDeadline(userID, title, desc, 0, dueDate)
 	if err != nil {
 		log.Printf("Error creating task: %v", err)
 		reply(bot, chatID, "Ошибка при добавлении задачи")
@@ -75,7 +75,7 @@ func handleAddTask(bot *tgbotapi.BotAPI, chatID int64, userID int64, args string
 // handleMyTasks - обрабатывает команду /my_tasks
 // Возвращает все задачи пользователя
 func handleMyTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
-	tasks, err := database.GetTasksByUserID(int64(userID))
+	tasks, err := database.GetTasksByUserID(userID)
 	if err != nil {
 		log.Printf("Error getting tasks: %v", err)
 		reply(bot, chatID, "Ошибка при получении задач")
@@ -100,7 +100,7 @@ func handleMyTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
 // handleTodayTasks - обрабатывает команду /today
 // Возвращает задачи, дедлайн которых на сегодня
 func handleTodayTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
-	tasks, err := database.GetTasksForToday(int64(userID))
+	tasks, err := database.GetTasksForToday(userID)
 	if err != nil {
 		log.Printf("Error getting today's tasks: %v", err)
 		reply(bot, chatID, "Ошибка при получении задач на сегодня")
@@ -125,7 +125,7 @@ func handleTodayTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
 // handleWeekTasks - обрабатывает команду /week
 // Возвращает задачи, дедлайн которых в ближайшие 7 дней
 func handleWeekTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
-	tasks, err := database.GetTasksForWeek(int64(userID))
+	tasks, err := database.GetTasksForWeek(userID)
 	if err != nil {
 		log.Printf("Error getting week's tasks: %v", err)
 		reply(bot, chatID, "Ошибка при получении задач на неделю")

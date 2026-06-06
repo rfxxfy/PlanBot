@@ -45,8 +45,8 @@ func (h *BotHandler) executeFullRebuild(chatID int64, user *models.User) {
 	timeAllocations := scheduler.PlanTimeAllocations(user, result.DaySchedules, startDate, busy)
 
 	taskIDs := make([]int64, len(tasks))
-	for i, task := range tasks {
-		taskIDs[i] = task.ID
+	for i := range tasks {
+		taskIDs[i] = tasks[i].ID
 	}
 	if err := database.ClearTaskSchedules(taskIDs); err != nil {
 		log.Printf("clear task schedules: %v", err)
@@ -74,7 +74,7 @@ func (h *BotHandler) executeFullRebuild(chatID int64, user *models.User) {
 		totalTasks:      len(tasks),
 	}
 	outcome.calendarSynced, outcome.calendarSyncFail, outcome.syncErrorDetail = h.syncGoogleCalendar(user, timeAllocations)
-	h.sendScheduleOutcome(chatID, user, outcome)
+	h.sendScheduleOutcome(chatID, user, &outcome)
 }
 
 func (h *BotHandler) executeInsertTask(chatID int64, user *models.User, taskID int64) {
@@ -126,7 +126,7 @@ func (h *BotHandler) executeInsertTask(chatID int64, user *models.User, taskID i
 		totalTasks:      1,
 	}
 	outcome.calendarSynced, outcome.calendarSyncFail, outcome.syncErrorDetail = h.syncGoogleCalendarAppend(user, newAllocations)
-	h.sendScheduleOutcome(chatID, user, outcome)
+	h.sendScheduleOutcome(chatID, user, &outcome)
 }
 
 func shortenCalendarError(err error) string {
@@ -140,7 +140,7 @@ func shortenCalendarError(err error) string {
 	return msg
 }
 
-func (h *BotHandler) syncGoogleCalendar(user *models.User, allocations []models.SlotAllocation) (synced bool, failed bool, detail string) {
+func (h *BotHandler) syncGoogleCalendar(user *models.User, allocations []models.SlotAllocation) (synced, failed bool, detail string) {
 	if len(allocations) == 0 {
 		return false, false, ""
 	}
@@ -162,7 +162,7 @@ func (h *BotHandler) syncGoogleCalendar(user *models.User, allocations []models.
 	return true, false, ""
 }
 
-func (h *BotHandler) syncGoogleCalendarAppend(user *models.User, allocations []models.SlotAllocation) (synced bool, failed bool, detail string) {
+func (h *BotHandler) syncGoogleCalendarAppend(user *models.User, allocations []models.SlotAllocation) (synced, failed bool, detail string) {
 	if len(allocations) == 0 {
 		return false, false, ""
 	}
@@ -184,7 +184,7 @@ func (h *BotHandler) syncGoogleCalendarAppend(user *models.User, allocations []m
 	return true, false, ""
 }
 
-func (h *BotHandler) sendScheduleOutcome(chatID int64, user *models.User, o scheduleOutcome) {
+func (h *BotHandler) sendScheduleOutcome(chatID int64, user *models.User, o *scheduleOutcome) {
 	response := fmt.Sprintf("✅ Планирование завершено (%s).\n\n", o.modeLabel)
 	if o.result != nil {
 		response += fmt.Sprintf("📊 %s\n", o.result.Message)

@@ -24,6 +24,12 @@ func main() {
 		log.Println("Warning: .env file not found, using system environment variables")
 	}
 
+	// Get bot token from environment
+	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	if botToken == "" {
+		log.Fatal("TELEGRAM_BOT_TOKEN is not set")
+	}
+
 	// Initialize database connection
 	if err := database.InitDB(); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
@@ -38,12 +44,6 @@ func main() {
 	healthServer := health.NewServer(healthPort, Version)
 	healthServer.Start()
 	log.Printf("Health check server running on port %s", healthPort)
-
-	// Get bot token from environment
-	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-	if botToken == "" {
-		log.Fatal("TELEGRAM_BOT_TOKEN is not set")
-	}
 
 	// Create bot instance
 	bot, err := tgbotapi.NewBotAPI(botToken)
@@ -70,6 +70,6 @@ func main() {
 
 	// Handle incoming messages
 	for update := range updates {
-		handler.HandleUpdate(update)
+		handler.HandleUpdate(&update)
 	}
 }
