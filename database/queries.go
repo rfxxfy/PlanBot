@@ -565,12 +565,14 @@ func SaveGoogleCalendarEvents(userID int64, events []models.GoogleCalendarEvent)
 	}
 	defer closeStmt(stmt)
 
-	for _, ev := range events {
+	for i := range events {
+		ev := events[i]
 		source := ev.Source
 		if source == "" {
 			source = "planbot"
 		}
 		_, err := stmt.Exec(userID, ev.GoogleEventID, ev.TaskID, source, ev.StartTime, ev.EndTime)
+
 		if err != nil {
 			return fmt.Errorf("failed to insert google event: %w", err)
 		}

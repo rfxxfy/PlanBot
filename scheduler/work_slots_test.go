@@ -66,7 +66,9 @@ func TestPlanningHorizonDays_InvalidEnvFallsBack(t *testing.T) {
 	if got := PlanningHorizonDays(); got != 365 {
 		t.Errorf("expected default horizon 365, got %d", got)
 	}
-	os.Unsetenv("PLANNING_HORIZON_DAYS")
+	if err := os.Unsetenv("PLANNING_HORIZON_DAYS"); err != nil {
+		t.Logf("unsetenv: %v", err)
+	}
 }
 
 func TestHorizonEndDate(t *testing.T) {
@@ -82,7 +84,11 @@ func TestHorizonEndDate(t *testing.T) {
 
 func TestSlotScheduler_BuildDailySlots_SkipsWeekend(t *testing.T) {
 	t.Setenv("PLANNING_HORIZON_DAYS", "3")
-	t.Cleanup(func() { os.Unsetenv("PLANNING_HORIZON_DAYS") })
+	t.Cleanup(func() {
+		if err := os.Unsetenv("PLANNING_HORIZON_DAYS"); err != nil {
+			t.Logf("unsetenv: %v", err)
+		}
+	})
 
 	user := &models.User{
 		ID:        1,
