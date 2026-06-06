@@ -73,27 +73,23 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(status)
+	writeJSON(w, status)
 }
 
 // readyHandler handles /ready endpoint (readiness probe)
 func (s *Server) readyHandler(w http.ResponseWriter, r *http.Request) {
 	// Check if database is ready
 	if database.DB == nil {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		w.Write([]byte("Database not initialized"))
+		writeText(w, http.StatusServiceUnavailable, "Database not initialized")
 		return
 	}
 
 	if err := database.DB.Ping(); err != nil {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		w.Write([]byte("Database not ready"))
+		writeText(w, http.StatusServiceUnavailable, "Database not ready")
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Ready"))
+	writeText(w, http.StatusOK, "Ready")
 }
 
 // rootHandler handles / endpoint
@@ -109,6 +105,19 @@ func (s *Server) rootHandler(w http.ResponseWriter, r *http.Request) {
 		"status":  "running",
 	}
 
+	writeJSON(w, response)
+}
+
+func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		log.Printf("encode json: %v", err)
+	}
+}
+
+func writeText(w http.ResponseWriter, status int, body string) {
+	w.WriteHeader(status)
+	if _, err := w.Write([]byte(body)); err != nil {
+		log.Printf("write response: %v", err)
+	}
 }

@@ -1,6 +1,7 @@
 package notifications
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"time"
@@ -112,7 +113,7 @@ func getAllUsers() ([]models.User, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer closeRows(rows)
 
 	var users []models.User
 	for rows.Next() {
@@ -136,7 +137,7 @@ func getTasksByDeadlineRange(userID int64, start, end time.Time) ([]models.Task,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer closeRows(rows)
 
 	var tasks []models.Task
 	for rows.Next() {
@@ -160,7 +161,7 @@ func getOverdueTasks(userID int64, now time.Time) ([]models.Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer closeRows(rows)
 
 	var tasks []models.Task
 	for rows.Next() {
@@ -178,5 +179,11 @@ func sendNotification(telegramID int64, message string) {
 	_, err := bot.Send(msg)
 	if err != nil {
 		log.Printf("Error sending notification to user %d: %v", telegramID, err)
+	}
+}
+
+func closeRows(rows *sql.Rows) {
+	if err := rows.Close(); err != nil {
+		log.Printf("close rows: %v", err)
 	}
 }
