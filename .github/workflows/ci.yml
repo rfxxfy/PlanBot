@@ -101,7 +101,7 @@ jobs:
           CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=$VERSION" -o planbot main.go
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: planbot-binary
           path: planbot
