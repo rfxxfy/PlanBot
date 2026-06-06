@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PlanBot — Презентация проекта</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --accent: #6ee7b7;
+      --accent2: #38bdf8;
+      --accent3: #a78bfa;
+      --bg-card: rgba(255,255,255,0.06);
+      --border: rgba(255,255,255,0.12);
+    }
+    .reveal {
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+    .reveal h1, .reveal h2, .reveal h3 {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-weight: 800;
+      text-transform: none;
+      letter-spacing: -0.02em;
+    }
+    .reveal h1 { font-size: 2.4em; line-height: 1.1; }
+    .reveal h2 { font-size: 1.6em; color: #fff; }
+    .reveal .subtitle {
+      color: var(--accent);
+      font-size: 1.1em;
+      font-weight: 600;
+      margin-top: 0.5em;
+    }
+    .reveal .tagline {
+      color: rgba(255,255,255,0.65);
+      font-size: 0.95em;
+      margin-top: 1.2em;
+    }
+    .reveal .slides { text-align: left; }
+    .reveal .slides section.title-slide { text-align: center; }
+    .reveal .gradient-text {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .reveal .emoji-hero { font-size: 3.5em; margin-bottom: 0.2em; }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.8rem;
+      margin-top: 1rem;
+    }
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1rem 1.1rem;
+      font-size: 0.72em;
+      line-height: 1.45;
+    }
+    .card strong { color: var(--accent); display: block; margin-bottom: 0.35em; font-size: 1.05em; }
+    .card.blue strong { color: var(--accent2); }
+    .card.purple strong { color: var(--accent3); }
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin: 1rem 0;
+      font-size: 0.7em;
+    }
+    .flow-step {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.5rem 0.8rem;
+      white-space: nowrap;
+    }
+    .flow-arrow { color: var(--accent); font-weight: 700; }
+    .cmd {
+      font-family: 'JetBrains Mono', monospace;
+      background: rgba(0,0,0,0.35);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.35rem 0.6rem;
+      font-size: 0.85em;
+      color: var(--accent);
+      display: inline-block;
+      margin: 0.15rem 0;
+    }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.8rem; }
+    .pill {
+      background: rgba(110,231,183,0.15);
+      border: 1px solid rgba(110,231,183,0.35);
+      color: var(--accent);
+      border-radius: 999px;
+      padding: 0.3rem 0.75rem;
+      font-size: 0.65em;
+      font-weight: 600;
+    }
+    .pill.blue { background: rgba(56,189,248,0.15); border-color: rgba(56,189,248,0.35); color: var(--accent2); }
+    .arch-box {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.48em;
+      line-height: 1.35;
+      background: rgba(0,0,0,0.4);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+      white-space: pre;
+      color: rgba(255,255,255,0.85);
+    }
+    .highlight { color: var(--accent); font-weight: 600; }
+    .reveal ul { margin-left: 1.2em; }
+    .reveal li { margin-bottom: 0.45em; font-size: 0.85em; }
+    .reveal .small { font-size: 0.65em; color: rgba(255,255,255,0.55); }
+    .reveal .center-list { text-align: center; list-style: none; margin: 0; padding: 0; }
+    .reveal .center-list li { font-size: 1em; margin: 0.6em 0; }
+    .stat-row { display: flex; gap: 1.5rem; justify-content: center; margin-top: 1.5rem; }
+    .stat { text-align: center; }
+    .stat .num { font-size: 2em; font-weight: 800; color: var(--accent); line-height: 1; }
+    .stat .lbl { font-size: 0.55em; color: rgba(255,255,255,0.6); margin-top: 0.3em; }
+    .reveal .slide-number { font-family: 'Inter', sans-serif; }
+    .problem-solution {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 1rem;
+      align-items: center;
+      margin-top: 1rem;
+    }
+    .problem-solution .arrow { font-size: 2em; color: var(--accent); text-align: center; }
+    .reveal section[data-background-gradient] {
+      background: linear-gradient(160deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+    }
+  </style>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+
+      <!-- SLIDE 1: Title -->
+      <section class="title-slide" data-background-gradient>
+        <div class="emoji-hero">📋</div>
+        <h1><span class="gradient-text">PlanBot</span></h1>
+        <p class="subtitle">Умный Telegram-бот для планирования задач</p>
+        <p class="tagline">Автоматическое распределение работы по дням · дедлайны · Google Calendar</p>
+        <div class="pill-row" style="justify-content: center; margin-top: 2rem;">
+          <span class="pill">Go</span>
+          <span class="pill blue">PostgreSQL</span>
+          <span class="pill">Docker</span>
+          <span class="pill blue">Telegram</span>
+        </div>
+      </section>
+
+      <!-- SLIDE 2: Problem -->
+      <section data-background-gradient>
+        <h2>😩 Проблема</h2>
+        <div class="problem-solution">
+          <div class="card">
+            <strong>Без PlanBot</strong>
+            Список задач растёт, дедлайны горят, а вы не знаете — <em>когда именно</em> что делать. Календарь и todo живут отдельно.
+          </div>
+          <div class="arrow">→</div>
+          <div class="card blue">
+            <strong>С PlanBot</strong>
+            Вы описываете задачи в Telegram — бот сам раскладывает их по рабочим дням с учётом нагрузки, приоритетов и занятости в календаре.
+          </div>
+        </div>
+        <p class="small" style="margin-top: 1.5rem; text-align: center;">Целевая аудитория: студенты, фрилансеры, все, кто планирует день в Telegram</p>
+      </section>
+
+      <!-- SLIDE 3: Features -->
+      <section data-background-gradient>
+        <h2>✨ Ключевые возможности</h2>
+        <div class="grid-3">
+          <div class="card">
+            <strong>🧠 Умное планирование</strong>
+            Deadline-Aware алгоритм: задачи с дедлайном планируются «с конца», остальные — с ближайшего дня
+          </div>
+          <div class="card blue">
+            <strong>⏱ Слоты по времени</strong>
+            Рабочие часы, выходные, занятость из Google Calendar — задачи не накладываются на встречи
+          </div>
+          <div class="card purple">
+            <strong>📅 Google Calendar</strong>
+            Экспорт расписания в календарь, импорт внешних событий в задачи, OAuth-подключение
+          </div>
+          <div class="card">
+            <strong>⚙️ Персонализация</strong>
+            Часы в день, рабочие дни, таймзона, начало/конец рабочего дня
+          </div>
+          <div class="card blue">
+            <strong>🔀 Два режима</strong>
+            Вписать новую задачу в текущий план или перепланировать всё с нуля
+          </div>
+          <div class="card purple">
+            <strong>📊 Прозрачность</strong>
+            Расписание на сегодня/неделю, статусы задач, предпросмотр слотов
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 4: User flow -->
+      <section data-background-gradient>
+        <h2>👤 Сценарий пользователя</h2>
+        <div class="flow">
+          <span class="flow-step">/start</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-step">/addtask Отчёт | 4 | 8 | 25.12</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-step">Вписать / Перепланировать</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-step">/today · /week</span>
+        </div>
+        <div class="grid-2" style="margin-top: 1.2rem;">
+          <div>
+            <p style="font-size: 0.75em; margin-bottom: 0.5em;"><span class="highlight">Создание задачи</span></p>
+            <div class="cmd">/addtask Название | часы | приоритет | дедлайн</div>
+            <p class="small" style="margin-top: 0.5em;">Минимум: название + часы. Приоритет 1–10, дедлайн опционален.</p>
+          </div>
+          <div>
+            <p style="font-size: 0.75em; margin-bottom: 0.5em;"><span class="highlight">Календарь</span></p>
+            <div class="cmd">/google_connect → /google_code</div>
+            <div class="cmd">/calendar_import 30</div>
+            <p class="small" style="margin-top: 0.5em;">Импорт событий на 30 дней (по умолчанию), экспорт при /schedule</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 5: Algorithm -->
+      <section data-background-gradient>
+        <h2>🔄 Алгоритм планирования</h2>
+        <p style="font-size: 0.8em; color: rgba(255,255,255,0.7);">Deadline-Aware Hybrid Scheduling · O(N × D)</p>
+        <div class="grid-2">
+          <div class="card">
+            <strong>1. Сортировка</strong>
+            Дедлайн → близость срока → приоритет → короткие задачи первыми
+          </div>
+          <div class="card blue">
+            <strong>2. Распределение</strong>
+            <span class="highlight">С дедлайном:</span> назад от дедлайна<br>
+            <span class="highlight">Без дедлайна:</span> вперёд от завтра
+          </div>
+        </div>
+        <ul style="margin-top: 1rem;">
+          <li>Не превышает <span class="highlight">daily_capacity</span> — задача дробится на несколько дней</li>
+          <li>Учитывает <span class="highlight">work_days</span> — выходные пропускаются</li>
+          <li>Блокирует <span class="highlight">занятые слоты</span> из Google Calendar</li>
+          <li>Горизонт планирования: до <span class="highlight">365 дней</span> (настраивается)</li>
+        </ul>
+      </section>
+
+      <!-- SLIDE 6: Architecture -->
+      <section data-background-gradient>
+        <h2>🏗 Архитектура</h2>
+        <div class="arch-box">  Telegram API
+       │
+       ▼
+  main.go ──► handlers/          commands, callbacks, parsing
+       │           │
+       │     ┌─────┴─────┬──────────────┐
+       ▼     ▼           ▼              ▼
+  scheduler/      database/      googlecal/      health/
+  планирование    PostgreSQL     Calendar API    :8080/health
+       │               │
+       └───────► models/ ◄───────┘
+                 User · Task · TimeSlot · BusyInterval</div>
+        <div class="pill-row">
+          <span class="pill">Монолит на Go</span>
+          <span class="pill blue">Слои: handlers → scheduler → database</span>
+          <span class="pill">5 таблиц в PostgreSQL</span>
+        </div>
+      </section>
+
+      <!-- SLIDE 7: Database -->
+      <section data-background-gradient>
+        <h2>🗄 База данных</h2>
+        <div class="grid-2">
+          <div class="card">
+            <strong>Ядро</strong>
+            <code style="color:var(--accent2)">users</code> — профиль, настройки, таймзона<br>
+            <code style="color:var(--accent2)">tasks</code> — задачи, статусы, дедлайны<br>
+            <code style="color:var(--accent2)">task_schedules</code> — часы по дням
+          </div>
+          <div class="card blue">
+            <strong>Google Calendar</strong>
+            <code style="color:var(--accent2)">user_google_tokens</code> — OAuth<br>
+            <code style="color:var(--accent2)">google_calendar_events</code> — связь событий<br>
+            <span class="small">source: planbot | imported</span>
+          </div>
+        </div>
+        <p style="font-size: 0.72em; margin-top: 1rem;">3NF · FK с CASCADE · уникальный индекс (user_id, google_event_id) · Adminer на :8081 в dev</p>
+      </section>
+
+      <!-- SLIDE 8: Tech stack -->
+      <section data-background-gradient>
+        <h2>🔧 Технологический стек</h2>
+        <div class="grid-3">
+          <div class="card"><strong>Backend</strong>Go 1.25<br>telegram-bot-api<br>lib/pq</div>
+          <div class="card blue"><strong>Инфра</strong>PostgreSQL 15<br>Docker Compose<br>Multi-stage Dockerfile</div>
+          <div class="card purple"><strong>Интеграции</strong>Google Calendar API<br>OAuth 2.0<br>Health checks</div>
+        </div>
+        <div class="stat-row">
+          <div class="stat"><div class="num">27+</div><div class="lbl">Go-файлов</div></div>
+          <div class="stat"><div class="num">5</div><div class="lbl">таблиц БД</div></div>
+          <div class="stat"><div class="num">15+</div><div class="lbl">команд бота</div></div>
+          <div class="stat"><div class="num">40+</div><div class="lbl">тестов</div></div>
+        </div>
+      </section>
+
+      <!-- SLIDE 9: DevOps -->
+      <section data-background-gradient>
+        <h2>🚀 DevOps и качество</h2>
+        <div class="grid-2">
+          <div class="card">
+            <strong>CI/CD (GitHub Actions)</strong>
+            Lint · тесты с PostgreSQL · сборка · Docker image · Codecov
+          </div>
+          <div class="card blue">
+            <strong>Развёртывание</strong>
+            <span class="cmd">docker-compose up -d</span><br>
+            dev-профиль: Adminer :8081<br>
+            prod: docker-compose.prod.yml
+          </div>
+        </div>
+        <ul style="margin-top: 0.8rem;">
+          <li>Health: <span class="cmd">/health</span> <span class="cmd">/ready</span> на порту 8080</li>
+          <li>Тесты: scheduler, handlers, googlecal, health, database integration</li>
+          <li>Makefile: build, test, docker-up-dev, db-setup, lint</li>
+        </ul>
+      </section>
+
+      <!-- SLIDE 10: Demo commands -->
+      <section data-background-gradient>
+        <h2>💬 Основные команды</h2>
+        <div class="grid-2" style="font-size: 0.72em;">
+          <div>
+            <p><span class="highlight">Задачи</span></p>
+            <div class="cmd">/addtask · /mytasks</div>
+            <div class="cmd">/complete ID · /delete ID</div>
+            <p style="margin-top: 0.8em;"><span class="highlight">Планирование</span></p>
+            <div class="cmd">/schedule · /schedule_slots</div>
+            <div class="cmd">/today · /week</div>
+          </div>
+          <div>
+            <p><span class="highlight">Настройки</span></p>
+            <div class="cmd">/settings 8 | 1,2,3,4,5</div>
+            <div class="cmd">/timezone Europe/Moscow</div>
+            <p style="margin-top: 0.8em;"><span class="highlight">Google</span></p>
+            <div class="cmd">/google_connect · /google_status</div>
+            <div class="cmd">/calendar_import</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 11: Summary -->
+      <section class="title-slide" data-background-gradient>
+        <h2>🎯 Итого</h2>
+        <ul class="center-list" style="margin-top: 1.5rem;">
+          <li>📋 <strong>PlanBot</strong> — персональный планировщик прямо в Telegram</li>
+          <li>🧠 Умный алгоритм с дедлайнами и календарём</li>
+          <li>🏗 Чистая архитектура на Go + PostgreSQL + Docker</li>
+          <li>✅ Готов к демо, тестам и продакшен-деплою</li>
+        </ul>
+        <p class="tagline" style="margin-top: 2rem;">Спасибо за внимание · Вопросы?</p>
+      </section>
+
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <script>
+    Reveal.initialize({
+      hash: true,
+      slideNumber: 'c/t',
+      transition: 'slide',
+      backgroundTransition: 'fade',
+      width: 1280,
+      height: 720,
+      margin: 0.08,
+      controls: true,
+      progress: true,
+      center: false,
+    });
+  </script>
+</body>
+</html>
