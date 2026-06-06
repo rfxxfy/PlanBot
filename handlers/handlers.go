@@ -8,12 +8,13 @@ import (
 	"strings"
 	"time"
 
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"golang.org/x/oauth2"
+
 	"github.com/adkhorst/planbot/database"
 	"github.com/adkhorst/planbot/googlecal"
 	"github.com/adkhorst/planbot/models"
 	"github.com/adkhorst/planbot/scheduler"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"golang.org/x/oauth2"
 )
 
 // Bot context for handlers

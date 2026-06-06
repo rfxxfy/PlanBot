@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/adkhorst/planbot/models"
 	"google.golang.org/api/calendar/v3"
+
+	"github.com/adkhorst/planbot/models"
 )
 
 // ExportSlotAllocations creates timed calendar events and returns saved event metadata.

@@ -5,9 +5,10 @@ import (
 	"log"
 	"time"
 
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+
 	"github.com/adkhorst/planbot/database"
 	"github.com/adkhorst/planbot/models"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 var (

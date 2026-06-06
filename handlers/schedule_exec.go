@@ -5,22 +5,23 @@ import (
 	"fmt"
 	"log"
 
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+
 	"github.com/adkhorst/planbot/database"
 	"github.com/adkhorst/planbot/googlecal"
 	"github.com/adkhorst/planbot/models"
 	"github.com/adkhorst/planbot/scheduler"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type scheduleOutcome struct {
-	modeLabel         string
-	result            *models.ScheduleResult
-	timeAllocations   []models.SlotAllocation
-	scheduledCount    int
-	totalTasks        int
-	calendarSynced    bool
-	calendarSyncFail  bool
-	syncErrorDetail   string
+	modeLabel        string
+	result           *models.ScheduleResult
+	timeAllocations  []models.SlotAllocation
+	scheduledCount   int
+	totalTasks       int
+	calendarSynced   bool
+	calendarSyncFail bool
+	syncErrorDetail  string
 }
 
 func (h *BotHandler) executeFullRebuild(chatID int64, user *models.User) {

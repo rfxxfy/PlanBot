@@ -4,8 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adkhorst/planbot/models"
 	"google.golang.org/api/calendar/v3"
+
+	"github.com/adkhorst/planbot/models"
 )
 
 func TestIsPlanBotCalendarEvent(t *testing.T) {

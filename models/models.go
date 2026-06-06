@@ -43,11 +43,11 @@ type GoogleCalendarEvent struct {
 
 // BusyInterval is a blocked time range (e.g. from Google Calendar).
 type BusyInterval struct {
-	Start    time.Time
-	End      time.Time
-	Summary  string
-	Source   string // "calendar", "external"
-	AllDay   bool
+	Start   time.Time
+	End     time.Time
+	Summary string
+	Source  string // "calendar", "external"
+	AllDay  bool
 }
 
 // Task represents a user's task

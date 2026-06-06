@@ -8,10 +8,11 @@ import (
 	"strings"
 	"time"
 
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+
 	"github.com/adkhorst/planbot/database"
 	"github.com/adkhorst/planbot/googlecal"
 	"github.com/adkhorst/planbot/models"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 func (h *BotHandler) handleCalendarImport(msg *tgbotapi.Message) {
@@ -101,4 +102,3 @@ func (h *BotHandler) handleCalendarImport(msg *tgbotapi.Message) {
 
 	h.sendMessage(msg.Chat.ID, fmt.Sprintf("📥 Импорт из календаря завершён.\nИмпортировано задач: %d\nПропущено (уже связаны): %d\n\nДальше выполните /schedule или добавляйте точечно.", imported, skipped))
 }
-

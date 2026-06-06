@@ -3,8 +3,9 @@ package googlecal
 import (
 	"context"
 
-	"github.com/adkhorst/planbot/database"
 	"golang.org/x/oauth2"
+
+	"github.com/adkhorst/planbot/database"
 )
 
 // ClientForUser builds a calendar client when the user has connected Google Calendar.

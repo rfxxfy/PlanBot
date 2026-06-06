@@ -45,4 +45,3 @@ func (h *BotHandler) deleteTaskFromCalendar(userID, taskID int64) error {
 	}
 	return nil
 }
-

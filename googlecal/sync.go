@@ -4,9 +4,10 @@ import (
 	"context"
 	"log"
 
+	"google.golang.org/api/googleapi"
+
 	"github.com/adkhorst/planbot/database"
 	"github.com/adkhorst/planbot/models"
-	"google.golang.org/api/googleapi"
 )
 
 const calendarIDPrimary = "primary"

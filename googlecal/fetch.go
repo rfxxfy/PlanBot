@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adkhorst/planbot/models"
 	"google.golang.org/api/calendar/v3"
+
+	"github.com/adkhorst/planbot/models"
 )
 
 // FetchBusyIntervals returns occupied time from Google Calendar.

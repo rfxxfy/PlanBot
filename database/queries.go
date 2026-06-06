@@ -6,9 +6,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/adkhorst/planbot/models"
 	"github.com/lib/pq"
 	"golang.org/x/oauth2"
+
+	"github.com/adkhorst/planbot/models"
 )
 
 // GetOrCreateUser gets existing user or creates a new one

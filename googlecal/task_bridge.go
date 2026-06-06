@@ -130,4 +130,3 @@ func eventTimeRange(ev *calendar.Event, loc *time.Location) (time.Time, time.Tim
 	}
 	return start, end, false, true
 }
-
