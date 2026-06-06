@@ -1,6 +1,8 @@
 package database
 
 import (
+	"database/sql"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -14,12 +16,25 @@ func requireTestDB(t *testing.T) {
 		t.Skip("DB_HOST not set, skipping integration test")
 	}
 	if DB == nil {
-		if err := InitDB(); err != nil {
+		connStr := fmt.Sprintf(
+			"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+			os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"),
+			os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"), os.Getenv("DB_SSLMODE"),
+		)
+		var err error
+		DB, err = sql.Open("postgres", connStr)
+		if err != nil {
+			t.Skipf("database unavailable: %v", err)
+		}
+		if err = DB.Ping(); err != nil {
 			t.Skipf("database unavailable: %v", err)
 		}
 	}
 	if _, err := DB.Exec(string(mustReadSchema(t))); err != nil {
 		t.Fatalf("apply schema: %v", err)
+	}
+	if err := EnsureSchema(); err != nil {
+		t.Fatalf("ensure schema: %v", err)
 	}
 }
 
