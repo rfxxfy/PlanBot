@@ -46,6 +46,8 @@ services:
       DB_NAME: ${DB_NAME:-planbot}
       DB_SSLMODE: ${DB_SSLMODE:-disable}
       TZ: ${TZ:-Europe/Moscow}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
     ports:
       - "8080:8080"
     networks:

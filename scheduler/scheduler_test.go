@@ -120,3 +120,94 @@ func TestScheduler_PrioritySorting(t *testing.T) {
 		t.Errorf("Expected High Priority task (ID 2) to be first, got ID %d", day.Tasks[0].TaskID)
 	}
 }
+
+func TestScheduler_NoSchedulableTasks(t *testing.T) {
+	user := &models.User{ID: 1, DailyCapacity: 8, WorkDays: []int{1, 2, 3, 4, 5}}
+	tasks := []models.Task{
+		{ID: 1, Title: "Done", HoursRequired: 2, Status: "completed"},
+		{ID: 2, Title: "Cancelled", HoursRequired: 1, Status: "cancelled"},
+	}
+
+	s := NewScheduler(user, tasks)
+	result := s.Schedule(time.Date(2025, 1, 6, 0, 0, 0, 0, time.UTC))
+
+	if result.Message != "Нет задач для планирования" {
+		t.Errorf("unexpected message: %q", result.Message)
+	}
+	if len(result.DaySchedules) != 0 {
+		t.Errorf("expected no day schedules, got %d", len(result.DaySchedules))
+	}
+}
+
+func TestScheduler_SkipsWeekends(t *testing.T) {
+	user := &models.User{
+		ID:            1,
+		DailyCapacity: 4,
+		WorkDays:      []int{1, 2, 3, 4, 5},
+	}
+	tasks := []models.Task{
+		{ID: 1, Title: "Weekend skip", HoursRequired: 4, Priority: 1},
+	}
+
+	s := NewScheduler(user, tasks)
+	// Saturday 2025-01-04
+	result := s.Schedule(time.Date(2025, 1, 4, 0, 0, 0, 0, time.UTC))
+
+	if len(result.DaySchedules) != 1 {
+		t.Fatalf("expected 1 work day scheduled, got %d", len(result.DaySchedules))
+	}
+	if result.DaySchedules[0].Date.Weekday() != time.Monday {
+		t.Errorf("expected Monday, got %v", result.DaySchedules[0].Date.Weekday())
+	}
+}
+
+func TestScheduler_DeadlineBeforeStartFails(t *testing.T) {
+	user := &models.User{ID: 1, DailyCapacity: 8, WorkDays: []int{1, 2, 3, 4, 5}}
+	deadline := time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC) // Friday before Monday start
+	tasks := []models.Task{
+		{ID: 1, Title: "Late", HoursRequired: 2, Priority: 5, Deadline: &deadline},
+	}
+
+	s := NewScheduler(user, tasks)
+	result := s.Schedule(time.Date(2025, 1, 6, 0, 0, 0, 0, time.UTC))
+
+	if result.Success {
+		t.Error("expected scheduling to fail when deadline is before start")
+	}
+	if len(result.UnscheduledTasks) != 1 || result.UnscheduledTasks[0] != 1 {
+		t.Errorf("expected task 1 unscheduled, got %v", result.UnscheduledTasks)
+	}
+}
+
+func TestSlotScheduler_AssignTasksToSlots(t *testing.T) {
+	loc := time.UTC
+	user := &models.User{
+		ID:        1,
+		WorkDays:  []int{1},
+		WorkStart: "09:00",
+		WorkEnd:   "12:00",
+	}
+	ss := NewSlotScheduler(user)
+
+	day := time.Date(2025, 1, 6, 0, 0, 0, 0, loc)
+	slots := []models.TimeSlot{
+		{UserID: 1, Date: day, Start: day.Add(9 * time.Hour), End: day.Add(10 * time.Hour), CapacityHours: 1},
+		{UserID: 1, Date: day, Start: day.Add(10 * time.Hour), End: day.Add(11 * time.Hour), CapacityHours: 1},
+		{UserID: 1, Date: day, Start: day.Add(11 * time.Hour), End: day.Add(12 * time.Hour), CapacityHours: 1},
+	}
+
+	tasks := []models.Task{
+		{ID: 1, Title: "Low", HoursRequired: 1.5, Priority: 1},
+		{ID: 2, Title: "High", HoursRequired: 1, Priority: 10},
+	}
+
+	assigned := ss.AssignTasksToSlots(tasks, slots)
+
+	var totalAllocated float64
+	for _, slot := range assigned {
+		totalAllocated += slot.AllocatedHours
+	}
+	if totalAllocated != 2.5 {
+		t.Errorf("expected 2.5h allocated across slots, got %f", totalAllocated)
+	}
+}
