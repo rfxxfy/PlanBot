@@ -53,7 +53,9 @@ func TestGetOrCreateUser_Integration(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = DB.Exec("DELETE FROM users WHERE telegram_id = $1", telegramID)
+		if _, err := DB.Exec("DELETE FROM users WHERE telegram_id = $1", telegramID); err != nil {
+			t.Logf("cleanup: %v", err)
+		}
 	})
 }
 
@@ -66,7 +68,9 @@ func TestCreateTaskAndSchedules_Integration(t *testing.T) {
 		t.Fatalf("GetOrCreateUser: %v", err)
 	}
 	t.Cleanup(func() {
-		_, _ = DB.Exec("DELETE FROM users WHERE telegram_id = $1", telegramID)
+		if _, err := DB.Exec("DELETE FROM users WHERE telegram_id = $1", telegramID); err != nil {
+			t.Logf("cleanup: %v", err)
+		}
 	})
 
 	deadline := time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)
@@ -128,7 +132,9 @@ func TestUpdateUserSettings_Integration(t *testing.T) {
 		t.Fatalf("GetOrCreateUser: %v", err)
 	}
 	t.Cleanup(func() {
-		_, _ = DB.Exec("DELETE FROM users WHERE telegram_id = $1", telegramID)
+		if _, err := DB.Exec("DELETE FROM users WHERE telegram_id = $1", telegramID); err != nil {
+			t.Logf("cleanup: %v", err)
+		}
 	})
 
 	if err := UpdateUserSettings(user.ID, 6, []int{1, 2, 3}, "10:00", "19:00"); err != nil {

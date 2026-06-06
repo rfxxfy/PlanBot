@@ -97,7 +97,9 @@ func (h *BotHandler) handleCallback(cb *tgbotapi.CallbackQuery) {
 	telegramID := cb.From.ID
 
 	// Always answer callback to stop Telegram loading spinner.
-	_, _ = h.bot.Request(tgbotapi.NewCallback(cb.ID, ""))
+	if _, err := h.bot.Request(tgbotapi.NewCallback(cb.ID, "")); err != nil {
+		log.Printf("callback answer: %v", err)
+	}
 
 	user, err := h.getUser(telegramID)
 	if err != nil {
@@ -439,7 +441,9 @@ func (h *BotHandler) handleComplete(msg *tgbotapi.Message) {
 		return
 	}
 
-	_ = h.syncTaskCompletionToCalendar(user.ID, taskID)
+	if err := h.syncTaskCompletionToCalendar(user.ID, taskID); err != nil {
+		log.Printf("sync task completion to calendar: %v", err)
+	}
 	h.sendMessage(msg.Chat.ID, "✅ Задача отмечена как выполненная!")
 }
 
@@ -469,7 +473,9 @@ func (h *BotHandler) handleDelete(msg *tgbotapi.Message) {
 		return
 	}
 
-	_ = h.deleteTaskFromCalendar(user.ID, taskID)
+	if err := h.deleteTaskFromCalendar(user.ID, taskID); err != nil {
+		log.Printf("delete task from calendar: %v", err)
+	}
 
 	err = database.DeleteTask(taskID)
 	if err != nil {
@@ -478,7 +484,9 @@ func (h *BotHandler) handleDelete(msg *tgbotapi.Message) {
 		return
 	}
 
-	_ = database.DeleteTaskCalendarLinks(user.ID, taskID)
+	if err := database.DeleteTaskCalendarLinks(user.ID, taskID); err != nil {
+		log.Printf("delete task calendar links: %v", err)
+	}
 	h.sendMessage(msg.Chat.ID, "🗑 Задача удалена")
 }
 

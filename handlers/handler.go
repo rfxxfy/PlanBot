@@ -226,5 +226,7 @@ func handleDeleteTask(bot *tgbotapi.BotAPI, chatID int64, args string) {
 // reply - вспомогательная функция для отправки сообщения пользователю
 func reply(bot *tgbotapi.BotAPI, chatID int64, text string) {
 	msg := tgbotapi.NewMessage(chatID, text)
-	bot.Send(msg)
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("send message: %v", err)
+	}
 }

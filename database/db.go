@@ -47,7 +47,9 @@ func InitDB() error {
 // CloseDB closes the database connection
 func CloseDB() {
 	if DB != nil {
-		DB.Close()
+		if err := DB.Close(); err != nil {
+			log.Printf("close database: %v", err)
+		}
 		log.Println("Database connection closed")
 	}
 }

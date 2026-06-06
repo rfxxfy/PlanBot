@@ -21,7 +21,7 @@ func GetStoredCalendarBusy(userID int64, from, to time.Time) ([]models.BusyInter
 	if err != nil {
 		return nil, fmt.Errorf("failed to query stored calendar events: %w", err)
 	}
-	defer rows.Close()
+	defer closeRows(rows)
 
 	var busy []models.BusyInterval
 	for rows.Next() {
@@ -52,7 +52,7 @@ func GetTaskCalendarEventIDs(userID, taskID int64) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query task calendar events: %w", err)
 	}
-	defer rows.Close()
+	defer closeRows(rows)
 
 	var ids []string
 	for rows.Next() {

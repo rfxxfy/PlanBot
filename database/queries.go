@@ -141,7 +141,7 @@ func GetUserTasks(userID int64) ([]models.Task, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tasks: %w", err)
 	}
-	defer rows.Close()
+	defer closeRows(rows)
 
 	tasks := []models.Task{}
 	for rows.Next() {
@@ -181,7 +181,7 @@ func GetPendingTasks(userID int64) ([]models.Task, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query pending tasks: %w", err)
 	}
-	defer rows.Close()
+	defer closeRows(rows)
 
 	tasks := []models.Task{}
 	for rows.Next() {
@@ -225,7 +225,7 @@ func GetActiveTasks(userID int64) ([]models.Task, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query active tasks: %w", err)
 	}
-	defer rows.Close()
+	defer closeRows(rows)
 
 	tasks := []models.Task{}
 	for rows.Next() {
@@ -317,7 +317,7 @@ func SaveTaskSchedules(schedules []models.DaySchedule) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer rollbackTx(tx)
 
 	// Prepare insert statement
 	stmt, err := tx.Prepare(`INSERT INTO task_schedules (task_id, scheduled_date, hours_allocated)
@@ -325,7 +325,7 @@ func SaveTaskSchedules(schedules []models.DaySchedule) error {
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
-	defer stmt.Close()
+	defer closeStmt(stmt)
 
 	// Insert all schedules
 	taskIDs := make(map[int64]bool)
@@ -423,7 +423,7 @@ func GetScheduleForDateRange(userID int64, startDate, endDate time.Time) ([]mode
 	if err != nil {
 		return nil, fmt.Errorf("failed to query schedules: %w", err)
 	}
-	defer rows.Close()
+	defer closeRows(rows)
 
 	// Group by date
 	scheduleMap := make(map[string]*models.DaySchedule)
@@ -519,7 +519,7 @@ func GetGoogleCalendarEventIDs(userID int64) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list google events: %w", err)
 	}
-	defer rows.Close()
+	defer closeRows(rows)
 
 	var ids []string
 	for rows.Next() {
@@ -551,7 +551,7 @@ func SaveGoogleCalendarEvents(userID int64, events []models.GoogleCalendarEvent)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer rollbackTx(tx)
 
 	stmt, err := tx.Prepare(`INSERT INTO google_calendar_events (user_id, google_event_id, task_id, source, start_time, end_time)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -563,7 +563,7 @@ func SaveGoogleCalendarEvents(userID int64, events []models.GoogleCalendarEvent)
 	if err != nil {
 		return fmt.Errorf("failed to prepare google events insert: %w", err)
 	}
-	defer stmt.Close()
+	defer closeStmt(stmt)
 
 	for _, ev := range events {
 		source := ev.Source

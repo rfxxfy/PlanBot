@@ -47,7 +47,7 @@ func GetTasksByUserID(userID int64) ([]*Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer closeRows(rows)
 
 	var tasks []*Task
 	for rows.Next() {
@@ -72,7 +72,7 @@ func GetTasksForToday(userID int64) ([]*Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer closeRows(rows)
 
 	var tasks []*Task
 	for rows.Next() {
@@ -97,7 +97,7 @@ func GetTasksForWeek(userID int64) ([]*Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer closeRows(rows)
 
 	var tasks []*Task
 	for rows.Next() {

@@ -48,7 +48,9 @@ func (h *BotHandler) executeFullRebuild(chatID int64, user *models.User) {
 	for i, task := range tasks {
 		taskIDs[i] = task.ID
 	}
-	_ = database.ClearTaskSchedules(taskIDs)
+	if err := database.ClearTaskSchedules(taskIDs); err != nil {
+		log.Printf("clear task schedules: %v", err)
+	}
 
 	if len(result.DaySchedules) > 0 {
 		if err := database.SaveTaskSchedules(result.DaySchedules); err != nil {
@@ -59,7 +61,9 @@ func (h *BotHandler) executeFullRebuild(chatID int64, user *models.User) {
 	}
 
 	for _, unscheduledID := range result.UnscheduledTasks {
-		_ = database.UpdateTaskStatus(unscheduledID, "pending")
+		if err := database.UpdateTaskStatus(unscheduledID, "pending"); err != nil {
+			log.Printf("update unscheduled task %d: %v", unscheduledID, err)
+		}
 	}
 
 	outcome := scheduleOutcome{
