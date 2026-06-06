@@ -31,17 +31,17 @@ type GoogleToken struct {
 
 // Task represents a user's task
 type Task struct {
-	ID            int64
-	UserID        int64
-	Title         string
-	Description   string
-	HoursRequired float64
-	Priority      int
-	Status        string // pending, scheduled, in_progress, completed, cancelled
-	Deadline      *time.Time
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	CompletedAt   *time.Time
+	ID            int64      `json:"id"`
+	UserID        int64      `json:"user_id"`
+	Title         string     `json:"title"`
+	Description   string     `json:"description"`
+	HoursRequired float64    `json:"hours_required"`
+	Priority      int        `json:"priority"`
+	Status        string     `json:"status"` // pending, scheduled, in_progress, completed, cancelled
+	Deadline      *time.Time `json:"deadline,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	CompletedAt   *time.Time `json:"completed_at,omitempty"`
 }
 
 // TaskSchedule represents when a task is scheduled

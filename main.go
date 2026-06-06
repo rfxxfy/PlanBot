@@ -53,6 +53,9 @@ func main() {
 	bot.Debug = os.Getenv("BOT_DEBUG") == "true"
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
+	// Initialize handlers
+	handler := handlers.NewBotHandler(bot)
+
 	// Start notifications
 	notifications.StartNotifications(bot)
 
@@ -66,12 +69,6 @@ func main() {
 
 	// Handle incoming messages
 	for update := range updates {
-		if update.Message == nil {
-			continue
-		}
-
-		if update.Message.IsCommand() {
-			handlers.HandleCommand(bot, update)
-		}
+		handler.HandleUpdate(update)
 	}
 }

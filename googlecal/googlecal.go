@@ -27,7 +27,7 @@ func ConfigFromEnv() (*oauth2.Config, error) {
 		ClientSecret: clientSecret,
 		Scopes:       calendarScopes,
 		Endpoint:     google.Endpoint,
-		RedirectURL:  "urn:ietf:wg:oauth:2.0:oob", // для desktop/CLI-флоу
+		RedirectURL:  "https://adkhorst.github.io/planbot/auth", // Placeholder or actual redirect URL
 	}, nil
 }
 
