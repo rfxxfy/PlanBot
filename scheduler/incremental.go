@@ -8,7 +8,7 @@ import (
 )
 
 // ScheduleTaskIntoExisting places one new task into free slots, keeping existing day plans unchanged.
-func ScheduleTaskIntoExisting(user *models.User, newTask models.Task, existing []models.DaySchedule, startDate time.Time, busy []models.BusyInterval) ([]models.DaySchedule, bool) {
+func ScheduleTaskIntoExisting(user *models.User, newTask *models.Task, existing []models.DaySchedule, startDate time.Time, busy []models.BusyInterval) ([]models.DaySchedule, bool) {
 	if newTask.HoursRequired <= 0 {
 		return nil, false
 	}

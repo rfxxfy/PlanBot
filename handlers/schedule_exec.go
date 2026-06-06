@@ -97,7 +97,7 @@ func (h *BotHandler) executeInsertTask(chatID int64, user *models.User, taskID i
 	}
 
 	busy := h.fetchCalendarBusy(user, startDate, false)
-	newDays, ok := scheduler.ScheduleTaskIntoExisting(user, *task, existing, startDate, busy)
+	newDays, ok := scheduler.ScheduleTaskIntoExisting(user, task, existing, startDate, busy)
 	if !ok || len(newDays) == 0 {
 		h.sendMessage(chatID, "⚠️ Не удалось вписать задачу в текущее расписание.\nСвободных слотов не хватает (дедлайн, загрузка или события в Google Calendar).\n\nПопробуйте «Перепланировать всё» — расписание будет пересобрано с нуля.")
 		return

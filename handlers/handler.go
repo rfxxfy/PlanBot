@@ -47,7 +47,7 @@ func HandleCommand(bot *tgbotapi.BotAPI, update *tgbotapi.Update) {
 
 // handleAddTask - обрабатывает команду /add_task
 // Формат: /add_task НАЗВАНИЕ | ОПИСАНИЕ | ГГГГ-ММ-ДД
-func handleAddTask(bot *tgbotapi.BotAPI, chatID int64, userID int64, args string) {
+func handleAddTask(bot *tgbotapi.BotAPI, chatID, userID int64, args string) {
 	parts := strings.SplitN(args, "|", 2)
 	if len(parts) < 2 {
 		reply(bot, chatID, "Используй: /add_task НАЗВАНИЕ | ОПИСАНИЕ | ГГГГ-ММ-ДД")
@@ -74,7 +74,7 @@ func handleAddTask(bot *tgbotapi.BotAPI, chatID int64, userID int64, args string
 
 // handleMyTasks - обрабатывает команду /my_tasks
 // Возвращает все задачи пользователя
-func handleMyTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
+func handleMyTasks(bot *tgbotapi.BotAPI, chatID, userID int64) {
 	tasks, err := database.GetTasksByUserID(userID)
 	if err != nil {
 		log.Printf("Error getting tasks: %v", err)
@@ -99,7 +99,7 @@ func handleMyTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
 
 // handleTodayTasks - обрабатывает команду /today
 // Возвращает задачи, дедлайн которых на сегодня
-func handleTodayTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
+func handleTodayTasks(bot *tgbotapi.BotAPI, chatID, userID int64) {
 	tasks, err := database.GetTasksForToday(userID)
 	if err != nil {
 		log.Printf("Error getting today's tasks: %v", err)
@@ -124,7 +124,7 @@ func handleTodayTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
 
 // handleWeekTasks - обрабатывает команду /week
 // Возвращает задачи, дедлайн которых в ближайшие 7 дней
-func handleWeekTasks(bot *tgbotapi.BotAPI, chatID int64, userID int64) {
+func handleWeekTasks(bot *tgbotapi.BotAPI, chatID, userID int64) {
 	tasks, err := database.GetTasksForWeek(userID)
 	if err != nil {
 		log.Printf("Error getting week's tasks: %v", err)

@@ -63,10 +63,10 @@ func (s *Scheduler) Schedule(startDate time.Time) *models.ScheduleResult {
 	daySlots := make(map[string]*models.DaySchedule)
 
 	// Schedule tasks
-	for _, task := range sortedTasks {
-		scheduled := s.scheduleTask(task, startDate, daySlots)
+	for i := range sortedTasks {
+		scheduled := s.scheduleTask(&sortedTasks[i], startDate, daySlots)
 		if !scheduled {
-			result.UnscheduledTasks = append(result.UnscheduledTasks, task.ID)
+			result.UnscheduledTasks = append(result.UnscheduledTasks, sortedTasks[i].ID)
 			result.Success = false
 		}
 	}
@@ -87,9 +87,9 @@ func (s *Scheduler) Schedule(startDate time.Time) *models.ScheduleResult {
 // It excludes only completed/cancelled tasks.
 func (s *Scheduler) filterSchedulableTasks() []models.Task {
 	active := []models.Task{}
-	for _, task := range s.tasks {
-		if task.Status != "completed" && task.Status != "cancelled" {
-			active = append(active, task)
+	for i := range s.tasks {
+		if s.tasks[i].Status != "completed" && s.tasks[i].Status != "cancelled" {
+			active = append(active, s.tasks[i])
 		}
 	}
 	return active
@@ -129,7 +129,7 @@ func (s *Scheduler) sortTasksByDeadlineAndPriority(tasks []models.Task) []models
 }
 
 // scheduleTask attempts to schedule a single task
-func (s *Scheduler) scheduleTask(task models.Task, startDate time.Time, daySlots map[string]*models.DaySchedule) bool {
+func (s *Scheduler) scheduleTask(task *models.Task, startDate time.Time, daySlots map[string]*models.DaySchedule) bool {
 	normalizedStart := s.normalizeDate(startDate)
 
 	if task.Deadline != nil {
@@ -139,7 +139,7 @@ func (s *Scheduler) scheduleTask(task models.Task, startDate time.Time, daySlots
 	return s.scheduleTaskForward(task, normalizedStart, daySlots)
 }
 
-func (s *Scheduler) scheduleTaskForward(task models.Task, startDate time.Time, daySlots map[string]*models.DaySchedule) bool {
+func (s *Scheduler) scheduleTaskForward(task *models.Task, startDate time.Time, daySlots map[string]*models.DaySchedule) bool {
 	remainingHours := task.HoursRequired
 	currentDate := startDate
 	maxDaysToCheck := s.planningHorizonDays
@@ -169,7 +169,7 @@ func (s *Scheduler) scheduleTaskForward(task models.Task, startDate time.Time, d
 	return remainingHours <= 1e-9
 }
 
-func (s *Scheduler) scheduleTaskBackward(task models.Task, startDate time.Time, daySlots map[string]*models.DaySchedule) bool {
+func (s *Scheduler) scheduleTaskBackward(task *models.Task, startDate time.Time, daySlots map[string]*models.DaySchedule) bool {
 	remainingHours := task.HoursRequired
 	deadline := s.normalizeDate(*task.Deadline)
 
@@ -188,7 +188,7 @@ func (s *Scheduler) scheduleTaskBackward(task models.Task, startDate time.Time, 
 	return remainingHours <= 1e-9
 }
 
-func (s *Scheduler) allocateToDay(task models.Task, date time.Time, remainingHours *float64, daySlots map[string]*models.DaySchedule) {
+func (s *Scheduler) allocateToDay(task *models.Task, date time.Time, remainingHours *float64, daySlots map[string]*models.DaySchedule) {
 	dateKey := s.formatDate(date)
 	daySlot, exists := daySlots[dateKey]
 	if !exists {
@@ -404,16 +404,16 @@ func (s *SlotScheduler) AssignTasksToSlots(tasks []models.Task, slots []models.T
 	baseScheduler := NewScheduler(s.user, tasks)
 	sortedTasks := baseScheduler.sortTasksByDeadlineAndPriority(tasks)
 
-	for _, task := range sortedTasks {
+	for i := range sortedTasks {
+		task := &sortedTasks[i]
 		remaining := task.HoursRequired
-		for i := range result {
+		for j := range result {
 			if remaining <= 0 {
 				break
 			}
 
-			slot := &result[i]
+			slot := &result[j]
 
-			// Skip slots that already fully occupied or belong to another task
 			if slot.AllocatedHours >= slot.CapacityHours {
 				continue
 			}

@@ -51,12 +51,12 @@ func SendReminders() {
 		return
 	}
 
-	for _, user := range users {
-		sendUserReminders(user)
+	for i := range users {
+		sendUserReminders(&users[i])
 	}
 }
 
-func sendUserReminders(user models.User) {
+func sendUserReminders(user *models.User) {
 	loc := time.UTC
 	if user.TimeZone != "" {
 		if l, err := time.LoadLocation(user.TimeZone); err == nil {
@@ -79,8 +79,9 @@ func sendUserReminders(user models.User) {
 
 		soonTasks, err := getTasksByDeadlineRange(user.ID, tomorrowStart, tomorrowEnd)
 		if err == nil {
-			for _, t := range soonTasks {
-				sendNotification(user.TelegramID, fmt.Sprintf("⏰ Напоминаю: задача \"%s\" истекает завтра (%s)", t.Title, t.Deadline.Format("02.01.2006")))
+			for i := range soonTasks {
+				t := soonTasks[i]
+				sendNotification(user.TelegramID, fmt.Sprintf("⏰ Напоминаю: задача %q истекает завтра (%s)", t.Title, t.Deadline.Format("02.01.2006")))
 			}
 		}
 
@@ -90,8 +91,9 @@ func sendUserReminders(user models.User) {
 
 		todayTasks, err := getTasksByDeadlineRange(user.ID, todayStart, todayEnd)
 		if err == nil {
-			for _, t := range todayTasks {
-				sendNotification(user.TelegramID, fmt.Sprintf("⚠️ Задача \"%s\" сегодня дедлайн! (%s)", t.Title, t.Deadline.Format("02.01.2006")))
+			for i := range todayTasks {
+				t := todayTasks[i]
+				sendNotification(user.TelegramID, fmt.Sprintf("⚠️ Задача %q сегодня дедлайн! (%s)", t.Title, t.Deadline.Format("02.01.2006")))
 			}
 		}
 	}
@@ -100,8 +102,9 @@ func sendUserReminders(user models.User) {
 	if now.Hour() == 10 {
 		overdueTasks, err := getOverdueTasks(user.ID, now)
 		if err == nil {
-			for _, t := range overdueTasks {
-				sendNotification(user.TelegramID, fmt.Sprintf("❌ Задача \"%s\" просрочена! (была до %s)", t.Title, t.Deadline.Format("02.01.2006")))
+			for i := range overdueTasks {
+				t := overdueTasks[i]
+				sendNotification(user.TelegramID, fmt.Sprintf("❌ Задача %q просрочена! (была до %s)", t.Title, t.Deadline.Format("02.01.2006")))
 			}
 		}
 	}

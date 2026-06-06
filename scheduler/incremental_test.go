@@ -35,7 +35,7 @@ func TestScheduleTaskIntoExisting_FitsInGap(t *testing.T) {
 		Priority:      3,
 	}
 
-	days, ok := ScheduleTaskIntoExisting(user, newTask, existing, startDate, nil)
+	days, ok := ScheduleTaskIntoExisting(user, &newTask, existing, startDate, nil)
 	if !ok {
 		t.Fatal("expected task to be scheduled")
 	}
@@ -52,7 +52,7 @@ func TestScheduleTaskIntoExisting_ZeroHours(t *testing.T) {
 	task := models.Task{ID: 1, HoursRequired: 0}
 	start := time.Date(2025, 1, 6, 0, 0, 0, 0, time.UTC)
 
-	_, ok := ScheduleTaskIntoExisting(user, task, nil, start, nil)
+	_, ok := ScheduleTaskIntoExisting(user, &task, nil, start, nil)
 	if ok {
 		t.Error("expected failure for zero-hour task")
 	}
@@ -77,7 +77,7 @@ func TestScheduleTaskIntoExisting_MissesDeadline(t *testing.T) {
 		Deadline:      &deadline,
 	}
 
-	_, ok := ScheduleTaskIntoExisting(user, newTask, nil, startDate, nil)
+	_, ok := ScheduleTaskIntoExisting(user, &newTask, nil, startDate, nil)
 	if ok {
 		t.Error("expected failure when task does not fit before deadline")
 	}

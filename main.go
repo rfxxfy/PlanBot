@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -17,6 +18,12 @@ import (
 var Version = "dev"
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	log.Printf("PlanBot version %s starting...", Version)
 
 	// Load environment variables
@@ -27,12 +34,12 @@ func main() {
 	// Get bot token from environment
 	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	if botToken == "" {
-		log.Fatal("TELEGRAM_BOT_TOKEN is not set")
+		return fmt.Errorf("TELEGRAM_BOT_TOKEN is not set")
 	}
 
 	// Initialize database connection
 	if err := database.InitDB(); err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		return fmt.Errorf("failed to initialize database: %w", err)
 	}
 	defer database.CloseDB()
 
@@ -48,7 +55,7 @@ func main() {
 	// Create bot instance
 	bot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
-		log.Fatalf("Failed to create bot: %v", err)
+		return fmt.Errorf("failed to create bot: %w", err)
 	}
 
 	bot.Debug = os.Getenv("BOT_DEBUG") == "true"
@@ -72,4 +79,6 @@ func main() {
 	for update := range updates {
 		handler.HandleUpdate(&update)
 	}
+
+	return nil
 }
