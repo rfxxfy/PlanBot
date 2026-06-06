@@ -1,209 +1,366 @@
 # Схема базы данных PlanBot
 
-## 📊 Визуализация структуры
+> Актуально для `database/schema.sql` · PostgreSQL 15 · 5 таблиц
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                          USERS                              │
-├─────────────────────────────────────────────────────────────┤
-│ PK │ id              BIGSERIAL                              │
-│    │ telegram_id     BIGINT         UNIQUE NOT NULL         │
-│    │ username        VARCHAR(255)                           │
-│    │ first_name      VARCHAR(255)                           │
-│    │ last_name       VARCHAR(255)                           │
-│    │ daily_capacity  DECIMAL(5,2)   DEFAULT 8.0             │
-│    │ work_days       INTEGER[]      DEFAULT [1,2,3,4,5]     │
-│    │ created_at      TIMESTAMP      DEFAULT CURRENT_TIME    │
-│    │ updated_at      TIMESTAMP      DEFAULT CURRENT_TIME    │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              │ 1
-                              │
-                              │ N
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                          TASKS                              │
-├─────────────────────────────────────────────────────────────┤
-│ PK │ id              BIGSERIAL                              │
-│ FK │ user_id         BIGINT         NOT NULL                │
-│    │ title           VARCHAR(500)   NOT NULL                │
-│    │ description     TEXT                                   │
-│    │ hours_required  DECIMAL(5,2)   NOT NULL                │
-│    │ priority        INTEGER        DEFAULT 0               │
-│    │ status          VARCHAR(50)    DEFAULT 'pending'       │
-│    │ deadline        TIMESTAMP                              │
-│    │ created_at      TIMESTAMP      DEFAULT CURRENT_TIME    │
-│    │ updated_at      TIMESTAMP      DEFAULT CURRENT_TIME    │
-│    │ completed_at    TIMESTAMP                              │
-├─────────────────────────────────────────────────────────────┤
-│ CONSTRAINT fk_tasks_user                                    │
-│   FOREIGN KEY (user_id) REFERENCES users(id)                │
-│   ON DELETE CASCADE                                         │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              │ 1
-                              │
-                              │ N
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     TASK_SCHEDULES                          │
-├─────────────────────────────────────────────────────────────┤
-│ PK │ id              BIGSERIAL                              │
-│ FK │ task_id         BIGINT         NOT NULL                │
-│    │ scheduled_date  DATE           NOT NULL                │
-│    │ hours_allocated DECIMAL(5,2)   NOT NULL                │
-│    │ created_at      TIMESTAMP      DEFAULT CURRENT_TIME    │
-├─────────────────────────────────────────────────────────────┤
-│ CONSTRAINT fk_task_schedules_task                           │
-│   FOREIGN KEY (task_id) REFERENCES tasks(id)                │
-│   ON DELETE CASCADE                                         │
-└─────────────────────────────────────────────────────────────┘
+PlanBot хранит профили пользователей Telegram, их задачи, дневное расписание и связь с Google Calendar (OAuth-токены + экспорт/импорт событий).
+
+---
+
+## ER-диаграмма (Mermaid)
+
+```mermaid
+erDiagram
+    users ||--o{ tasks : "создаёт"
+    users ||--o| user_google_tokens : "авторизует"
+    users ||--o{ google_calendar_events : "синхронизирует"
+    tasks ||--o{ task_schedules : "распределена на"
+    tasks ||--o{ google_calendar_events : "экспортирована как"
+
+    users {
+        bigserial id PK
+        bigint telegram_id UK "UNIQUE NOT NULL"
+        varchar username
+        varchar first_name
+        varchar last_name
+        varchar time_zone "DEFAULT Europe/Moscow"
+        varchar work_start "DEFAULT 09:00"
+        varchar work_end "DEFAULT 18:00"
+        decimal daily_capacity "DEFAULT 8.0"
+        int_array work_days "DEFAULT [1..5]"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    tasks {
+        bigserial id PK
+        bigint user_id FK
+        varchar title "NOT NULL"
+        text description
+        decimal hours_required "NOT NULL"
+        int priority "DEFAULT 0"
+        varchar status "DEFAULT pending"
+        timestamp deadline
+        timestamp created_at
+        timestamp updated_at
+        timestamp completed_at
+    }
+
+    task_schedules {
+        bigserial id PK
+        bigint task_id FK
+        date scheduled_date "NOT NULL"
+        decimal hours_allocated "NOT NULL"
+        timestamp created_at
+    }
+
+    user_google_tokens {
+        bigint user_id PK,FK
+        text access_token "NOT NULL"
+        text refresh_token "NOT NULL"
+        timestamp expiry "NOT NULL"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    google_calendar_events {
+        bigserial id PK
+        bigint user_id FK
+        varchar google_event_id "NOT NULL"
+        bigint task_id FK "NULLABLE"
+        varchar source "DEFAULT planbot"
+        timestamp start_time "NOT NULL"
+        timestamp end_time "NOT NULL"
+        timestamp created_at
+    }
 ```
 
 ---
 
-## 🔗 Связи между таблицами
+## Схема для dbdiagram.io / DBML
 
-### 1. users → tasks (Один ко многим)
-- **Тип связи**: 1:N (один пользователь может иметь много задач)
-- **Внешний ключ**: `tasks.user_id` → `users.id`
-- **Каскадное удаление**: При удалении пользователя удаляются все его задачи
+Скопируйте блок ниже на [dbdiagram.io](https://dbdiagram.io) для интерактивной схемы:
 
-### 2. tasks → task_schedules (Один ко многим)
-- **Тип связи**: 1:N (одна задача может быть распределена на несколько дней)
-- **Внешний ключ**: `task_schedules.task_id` → `tasks.id`
-- **Каскадное удаление**: При удалении задачи удаляются все её расписания
+```dbml
+Project PlanBot {
+  database_type: "PostgreSQL"
+  Note: "Telegram task planner with Google Calendar sync"
+}
+
+Table users {
+  id bigserial [pk, increment]
+  telegram_id bigint [unique, not null, note: "Telegram user ID"]
+  username varchar(255)
+  first_name varchar(255)
+  last_name varchar(255)
+  time_zone varchar(255) [default: "Europe/Moscow"]
+  work_start varchar(5) [default: "09:00", note: "HH:MM"]
+  work_end varchar(5) [default: "18:00", note: "HH:MM"]
+  daily_capacity decimal(5,2) [default: 8.0, note: "hours per work day"]
+  work_days integer[] [default: "ARRAY[1,2,3,4,5]", note: "1=Mon … 7=Sun"]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    telegram_id [name: "idx_users_telegram_id"]
+  }
+}
+
+Table tasks {
+  id bigserial [pk, increment]
+  user_id bigint [not null, ref: > users.id]
+  title varchar(500) [not null]
+  description text
+  hours_required decimal(5,2) [not null]
+  priority integer [default: 0, note: "1–10 in bot UI"]
+  status varchar(50) [default: "pending"]
+  deadline timestamp
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`]
+  completed_at timestamp
+
+  indexes {
+    user_id [name: "idx_tasks_user_id"]
+    status [name: "idx_tasks_status"]
+    deadline [name: "idx_tasks_deadline"]
+  }
+}
+
+Table task_schedules {
+  id bigserial [pk, increment]
+  task_id bigint [not null, ref: > tasks.id]
+  scheduled_date date [not null]
+  hours_allocated decimal(5,2) [not null]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    task_id [name: "idx_task_schedules_task_id"]
+    scheduled_date [name: "idx_task_schedules_date"]
+  }
+}
+
+Table user_google_tokens {
+  user_id bigint [pk, ref: - users.id, note: "1:1 with user"]
+  access_token text [not null]
+  refresh_token text [not null]
+  expiry timestamp [not null]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`]
+}
+
+Table google_calendar_events {
+  id bigserial [pk, increment]
+  user_id bigint [not null, ref: > users.id]
+  google_event_id varchar(255) [not null]
+  task_id bigint [ref: > tasks.id, note: "ON DELETE SET NULL"]
+  source varchar(50) [not null, default: "planbot", note: "planbot | imported"]
+  start_time timestamp [not null]
+  end_time timestamp [not null]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    user_id [name: "idx_google_calendar_events_user_id"]
+    (user_id, google_event_id) [unique, name: "idx_google_calendar_events_user_event"]
+  }
+}
+```
 
 ---
 
-## 📋 Описание таблиц
+## Обзор связей
 
-### Таблица: `users`
-**Назначение**: Хранение информации о пользователях Telegram-бота
+```mermaid
+flowchart LR
+    subgraph core["Ядро планирования"]
+        U[users]
+        T[tasks]
+        TS[task_schedules]
+    end
+
+    subgraph gcal["Google Calendar"]
+        GT[user_google_tokens]
+        GCE[google_calendar_events]
+    end
+
+    U -->|1:N CASCADE| T
+    T -->|1:N CASCADE| TS
+    U -->|1:1 CASCADE| GT
+    U -->|1:N CASCADE| GCE
+    T -.->|0:N SET NULL| GCE
+```
+
+| Связь | Тип | ON DELETE | Назначение |
+|-------|-----|-----------|------------|
+| `users` → `tasks` | 1:N | CASCADE | Задачи принадлежат пользователю |
+| `tasks` → `task_schedules` | 1:N | CASCADE | Задача может быть разбита на несколько дней |
+| `users` → `user_google_tokens` | 1:1 | CASCADE | OAuth-токены Google на пользователя |
+| `users` → `google_calendar_events` | 1:N | CASCADE | Все привязанные события календаря |
+| `tasks` → `google_calendar_events` | 1:N | SET NULL | Событие может ссылаться на задачу; при удалении задачи связь обнуляется |
+
+---
+
+## Таблицы
+
+### `users`
+
+Профиль Telegram-пользователя и настройки планировщика.
+
+| Поле | Тип | По умолчанию | Описание |
+|------|-----|--------------|----------|
+| `id` | BIGSERIAL | — | PK |
+| `telegram_id` | BIGINT | — | Уникальный ID в Telegram |
+| `username` | VARCHAR(255) | NULL | @username |
+| `first_name` | VARCHAR(255) | NULL | Имя |
+| `last_name` | VARCHAR(255) | NULL | Фамилия |
+| `time_zone` | VARCHAR(255) | `Europe/Moscow` | IANA-таймзона (`/timezone`) |
+| `work_start` | VARCHAR(5) | `09:00` | Начало рабочего дня (HH:MM) |
+| `work_end` | VARCHAR(5) | `18:00` | Конец рабочего дня (HH:MM) |
+| `daily_capacity` | DECIMAL(5,2) | `8.0` | Часов в рабочий день |
+| `work_days` | INTEGER[] | `[1,2,3,4,5]` | Рабочие дни: 1=Пн … 7=Вс |
+| `created_at` | TIMESTAMP | `now()` | Дата регистрации |
+| `updated_at` | TIMESTAMP | `now()` | Последнее обновление |
+
+**Индекс:** `idx_users_telegram_id`
+
+---
+
+### `tasks`
+
+Задачи пользователя.
+
+| Поле | Тип | По умолчанию | Описание |
+|------|-----|--------------|----------|
+| `id` | BIGSERIAL | — | PK |
+| `user_id` | BIGINT | — | FK → `users.id` |
+| `title` | VARCHAR(500) | — | Название (обязательно) |
+| `description` | TEXT | NULL | Описание |
+| `hours_required` | DECIMAL(5,2) | — | Трудоёмкость в часах |
+| `priority` | INTEGER | `0` | Приоритет (в боте: 1–10) |
+| `status` | VARCHAR(50) | `pending` | `pending`, `scheduled`, `in_progress`, `completed`, `cancelled` |
+| `deadline` | TIMESTAMP | NULL | Жёсткий дедлайн |
+| `created_at` | TIMESTAMP | `now()` | Создание |
+| `updated_at` | TIMESTAMP | `now()` | Изменение |
+| `completed_at` | TIMESTAMP | NULL | Завершение |
+
+**Индексы:** `idx_tasks_user_id`, `idx_tasks_status`, `idx_tasks_deadline`
+
+---
+
+### `task_schedules`
+
+Дневное расписание: сколько часов задачи выделено на конкретную дату.
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `id` | BIGSERIAL | Первичный ключ, автоинкремент |
-| `telegram_id` | BIGINT | Уникальный ID пользователя в Telegram |
-| `username` | VARCHAR(255) | Имя пользователя в Telegram (@username) |
-| `first_name` | VARCHAR(255) | Имя пользователя |
-| `last_name` | VARCHAR(255) | Фамилия пользователя |
-| `daily_capacity` | DECIMAL(5,2) | Сколько часов в день пользователь может работать (по умолчанию 8.0) |
-| `work_days` | INTEGER[] | Массив рабочих дней недели (1=Пн, 7=Вс), по умолчанию [1,2,3,4,5] |
-| `created_at` | TIMESTAMP | Дата регистрации пользователя |
-| `updated_at` | TIMESTAMP | Дата последнего обновления профиля |
+| `id` | BIGSERIAL | PK |
+| `task_id` | BIGINT | FK → `tasks.id` |
+| `scheduled_date` | DATE | День планирования |
+| `hours_allocated` | DECIMAL(5,2) | Часов в этот день |
+| `created_at` | TIMESTAMP | Создание записи |
 
-**Индексы**:
-- `idx_users_telegram_id` на поле `telegram_id` - для быстрого поиска пользователя
+**Индексы:** `idx_task_schedules_task_id`, `idx_task_schedules_date`
 
-**Пример данных**:
-```sql
-INSERT INTO users (telegram_id, username, first_name, daily_capacity, work_days)
-VALUES (123456789, 'john_doe', 'John', 8.0, ARRAY[1,2,3,4,5]);
-```
+> Одна задача может иметь несколько строк (разбиение на дни). Сумма `hours_allocated` обычно равна `hours_required`, но при частичном планировании может быть меньше.
 
 ---
 
-### Таблица: `tasks`
-**Назначение**: Хранение задач пользователей
+### `user_google_tokens`
+
+OAuth 2.0 токены Google Calendar (одна запись на пользователя).
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `id` | BIGSERIAL | Первичный ключ, автоинкремент |
-| `user_id` | BIGINT | Внешний ключ на таблицу users |
-| `title` | VARCHAR(500) | Название задачи (обязательное) |
-| `description` | TEXT | Подробное описание задачи (опционально) |
-| `hours_required` | DECIMAL(5,2) | Количество часов, необходимых для выполнения |
-| `priority` | INTEGER | Приоритет задачи (0-10, где 10 - наивысший) |
-| `status` | VARCHAR(50) | Статус: 'pending', 'scheduled', 'in_progress', 'completed', 'cancelled' |
-| `deadline` | TIMESTAMP | Крайний срок выполнения (может быть NULL) |
-| `created_at` | TIMESTAMP | Дата создания задачи |
-| `updated_at` | TIMESTAMP | Дата последнего изменения |
-| `completed_at` | TIMESTAMP | Дата завершения задачи (NULL если не завершена) |
+| `user_id` | BIGINT | PK + FK → `users.id` |
+| `access_token` | TEXT | Access token |
+| `refresh_token` | TEXT | Refresh token |
+| `expiry` | TIMESTAMP | Срок действия access token |
+| `created_at` | TIMESTAMP | Первое подключение |
+| `updated_at` | TIMESTAMP | Последнее обновление токена |
 
-**Индексы**:
-- `idx_tasks_user_id` на поле `user_id` - для быстрого получения задач пользователя
-- `idx_tasks_status` на поле `status` - для фильтрации по статусу
-- `idx_tasks_deadline` на поле `deadline` - для сортировки по дедлайнам
+Используется командами `/google_connect`, `/google_code`, `/google_status`.
 
-**Пример данных**:
-```sql
-INSERT INTO tasks (user_id, title, description, hours_required, priority, status, deadline)
-VALUES (1, 'Написать отчёт', 'Квартальный отчёт по продажам', 4.0, 8, 'pending', '2026-01-15 23:59:59');
+---
+
+### `google_calendar_events`
+
+Связь между задачами бота и событиями в Google Calendar.
+
+| Поле | Тип | По умолчанию | Описание |
+|------|-----|--------------|----------|
+| `id` | BIGSERIAL | — | PK |
+| `user_id` | BIGINT | — | FK → `users.id` |
+| `google_event_id` | VARCHAR(255) | — | ID события в Google |
+| `task_id` | BIGINT | NULL | FK → `tasks.id` (может быть NULL) |
+| `source` | VARCHAR(50) | `planbot` | Происхождение связи (см. ниже) |
+| `start_time` | TIMESTAMP | — | Начало события |
+| `end_time` | TIMESTAMP | — | Конец события |
+| `created_at` | TIMESTAMP | `now()` | Создание связи |
+
+**Индексы:**
+- `idx_google_calendar_events_user_id`
+- `idx_google_calendar_events_user_event` — **UNIQUE** `(user_id, google_event_id)`
+
+#### Значения `source`
+
+| Значение | Когда создаётся | Поведение |
+|----------|-----------------|-----------|
+| `planbot` | Экспорт при `/schedule` | Удаляются при полном перепланировании; учитываются как busy при планировании |
+| `imported` | `/calendar_import` | Связь внешнего события → задача; не дублируется при повторном импорте |
+
+---
+
+## Жизненный цикл данных
+
+```mermaid
+sequenceDiagram
+    participant TG as Telegram
+    participant Bot as PlanBot
+    participant DB as PostgreSQL
+    participant GC as Google Calendar
+
+    TG->>Bot: /start
+    Bot->>DB: INSERT users
+
+    TG->>Bot: /addtask
+    Bot->>DB: INSERT tasks (status=pending)
+
+    TG->>Bot: /schedule
+    Bot->>DB: DELETE task_schedules + CLEAR planbot events
+    Bot->>GC: Fetch busy intervals
+    Bot->>DB: INSERT task_schedules, UPDATE tasks.status=scheduled
+    Bot->>GC: Export slot allocations
+    Bot->>DB: UPSERT google_calendar_events (source=planbot)
+
+    TG->>Bot: /calendar_import
+    Bot->>GC: List external events
+    Bot->>DB: INSERT tasks + UPSERT google_calendar_events (source=imported)
+
+    TG->>Bot: /google_connect + /google_code
+    Bot->>DB: UPSERT user_google_tokens
 ```
 
 ---
 
-### Таблица: `task_schedules`
-**Назначение**: Хранение расписания выполнения задач по дням
+## Примеры SQL-запросов
 
-| Поле | Тип | Описание |
-|------|-----|----------|
-| `id` | BIGSERIAL | Первичный ключ, автоинкремент |
-| `task_id` | BIGINT | Внешний ключ на таблицу tasks |
-| `scheduled_date` | DATE | Дата, на которую запланирована задача |
-| `hours_allocated` | DECIMAL(5,2) | Сколько часов выделено на эту задачу в этот день |
-| `created_at` | TIMESTAMP | Дата создания записи расписания |
+### Расписание пользователя на день
 
-**Индексы**:
-- `idx_task_schedules_task_id` на поле `task_id` - для получения расписания конкретной задачи
-- `idx_task_schedules_date` на поле `scheduled_date` - для получения расписания на определённую дату
-
-**Особенности**:
-- Одна задача может иметь несколько записей в этой таблице (если распределена на несколько дней)
-- Сумма `hours_allocated` для одной задачи должна равняться `tasks.hours_required`
-
-**Пример данных**:
 ```sql
--- Задача на 12 часов, распределённая на 2 дня
-INSERT INTO task_schedules (task_id, scheduled_date, hours_allocated)
-VALUES 
-    (1, '2026-01-10', 8.0),  -- 8 часов в первый день
-    (1, '2026-01-11', 4.0);  -- 4 часа во второй день
-```
-
----
-
-## 🔍 Примеры SQL-запросов
-
-### 1. Получить все задачи пользователя с расписанием
-```sql
-SELECT 
-    u.username,
-    t.title,
-    t.hours_required,
-    t.priority,
-    t.deadline,
-    ts.scheduled_date,
-    ts.hours_allocated
-FROM users u
-JOIN tasks t ON u.id = t.user_id
-LEFT JOIN task_schedules ts ON t.id = ts.task_id
-WHERE u.telegram_id = 123456789
-ORDER BY ts.scheduled_date, t.priority DESC;
-```
-
-### 2. Получить расписание на конкретный день
-```sql
-SELECT 
-    t.title,
-    t.priority,
-    t.deadline,
-    ts.hours_allocated
+SELECT t.title, t.priority, ts.hours_allocated
 FROM task_schedules ts
 JOIN tasks t ON ts.task_id = t.id
-WHERE t.user_id = 1 
-  AND ts.scheduled_date = '2026-01-10'
+WHERE t.user_id = 1
+  AND ts.scheduled_date = CURRENT_DATE
 ORDER BY t.priority DESC;
 ```
 
-### 3. Вычислить загрузку по дням
+### Загрузка по дням vs дневная ёмкость
+
 ```sql
-SELECT 
+SELECT
     ts.scheduled_date,
-    SUM(ts.hours_allocated) as total_hours,
+    SUM(ts.hours_allocated) AS planned_hours,
     u.daily_capacity,
-    u.daily_capacity - SUM(ts.hours_allocated) as free_hours
+    u.daily_capacity - SUM(ts.hours_allocated) AS free_hours
 FROM task_schedules ts
 JOIN tasks t ON ts.task_id = t.id
 JOIN users u ON t.user_id = u.id
@@ -212,163 +369,153 @@ GROUP BY ts.scheduled_date, u.daily_capacity
 ORDER BY ts.scheduled_date;
 ```
 
-### 4. Найти просроченные задачи
+### Экспортированные события PlanBot в календаре
+
 ```sql
-SELECT 
-    t.id,
-    t.title,
-    t.deadline,
-    t.status
-FROM tasks t
-WHERE t.user_id = 1
-  AND t.deadline < CURRENT_TIMESTAMP
-  AND t.status != 'completed'
-ORDER BY t.deadline;
+SELECT g.google_event_id, t.title, g.start_time, g.end_time
+FROM google_calendar_events g
+LEFT JOIN tasks t ON t.id = g.task_id
+WHERE g.user_id = 1
+  AND g.source = 'planbot'
+ORDER BY g.start_time;
 ```
 
-### 5. Статистика по задачам пользователя
+### Импортированные из календаря задачи
+
 ```sql
-SELECT 
-    u.username,
-    COUNT(CASE WHEN t.status = 'completed' THEN 1 END) as completed_tasks,
-    COUNT(CASE WHEN t.status = 'pending' THEN 1 END) as pending_tasks,
-    COUNT(CASE WHEN t.status = 'in_progress' THEN 1 END) as in_progress_tasks,
-    SUM(CASE WHEN t.status = 'completed' THEN t.hours_required ELSE 0 END) as total_hours_completed
-FROM users u
-LEFT JOIN tasks t ON u.id = t.user_id
-WHERE u.id = 1
-GROUP BY u.username;
+SELECT t.id, t.title, g.google_event_id, g.start_time, g.end_time
+FROM google_calendar_events g
+JOIN tasks t ON t.id = g.task_id
+WHERE g.user_id = 1
+  AND g.source = 'imported';
+```
+
+### Просроченные активные задачи
+
+```sql
+SELECT id, title, deadline, status
+FROM tasks
+WHERE user_id = 1
+  AND deadline < CURRENT_TIMESTAMP
+  AND status NOT IN ('completed', 'cancelled')
+ORDER BY deadline;
 ```
 
 ---
 
-## 🛡️ Ограничения целостности
+## Ограничения целостности
 
-### Первичные ключи (PRIMARY KEY)
-- `users.id` - уникальный идентификатор пользователя
-- `tasks.id` - уникальный идентификатор задачи
-- `task_schedules.id` - уникальный идентификатор записи расписания
+### Первичные ключи
+- `users.id`, `tasks.id`, `task_schedules.id`, `google_calendar_events.id`
+- `user_google_tokens.user_id` (одновременно PK и FK)
 
-### Уникальные ограничения (UNIQUE)
-- `users.telegram_id` - один Telegram-аккаунт = один пользователь в системе
+### Уникальные ограничения
+- `users.telegram_id`
+- `google_calendar_events (user_id, google_event_id)`
 
-### Внешние ключи (FOREIGN KEY)
-- `tasks.user_id` → `users.id` с `ON DELETE CASCADE`
-  - При удалении пользователя автоматически удаляются все его задачи
-  
-- `task_schedules.task_id` → `tasks.id` с `ON DELETE CASCADE`
-  - При удалении задачи автоматически удаляются все её расписания
+### Внешние ключи
 
-### NOT NULL ограничения
-- `users.telegram_id` - обязательное поле
-- `tasks.user_id` - задача должна принадлежать пользователю
-- `tasks.title` - задача должна иметь название
-- `tasks.hours_required` - должно быть указано время выполнения
-- `task_schedules.task_id` - расписание должно быть привязано к задаче
-- `task_schedules.scheduled_date` - должна быть указана дата
-- `task_schedules.hours_allocated` - должно быть указано количество часов
+| FK | Ссылка | ON DELETE |
+|----|--------|-----------|
+| `tasks.user_id` | `users.id` | CASCADE |
+| `task_schedules.task_id` | `tasks.id` | CASCADE |
+| `user_google_tokens.user_id` | `users.id` | CASCADE |
+| `google_calendar_events.user_id` | `users.id` | CASCADE |
+| `google_calendar_events.task_id` | `tasks.id` | SET NULL |
 
-### Значения по умолчанию (DEFAULT)
-- `users.daily_capacity` = 8.0 часов
-- `users.work_days` = [1,2,3,4,5] (Пн-Пт)
-- `tasks.priority` = 0
-- `tasks.status` = 'pending'
-- Все `created_at` и `updated_at` = `CURRENT_TIMESTAMP`
+### Статусы задач
+
+```
+pending → scheduled → in_progress → completed
+                  ↘ cancelled
+```
 
 ---
 
-## 📈 Нормализация базы данных
+## Миграции и развёртывание
 
-### Текущая форма: **3NF (Третья нормальная форма)**
+### Новая база
 
-#### 1NF (Первая нормальная форма) ✅
-- Все атрибуты атомарны (кроме `work_days`, но это допустимо в PostgreSQL)
-- Нет повторяющихся групп
-- Есть первичные ключи
+```bash
+psql -U planbot -d planbot -f database/schema.sql
+```
 
-#### 2NF (Вторая нормальная форма) ✅
-- Соблюдается 1NF
-- Все неключевые атрибуты полностью зависят от первичного ключа
-- Нет частичных зависимостей
+Docker Compose монтирует `schema.sql` в `docker-entrypoint-initdb.d/` при первом старте контейнера.
 
-#### 3NF (Третья нормальная форма) ✅
-- Соблюдается 2NF
-- Нет транзитивных зависимостей
-- Все неключевые атрибуты зависят только от первичного ключа
+### Обновление существующей базы
 
-**Обоснование разделения на 3 таблицы**:
+```bash
+psql -U planbot -d planbot -f database/migrations.sql
+```
 
-1. **users** - содержит данные о пользователе и его настройках
-2. **tasks** - содержит данные о задачах (зависят от пользователя)
-3. **task_schedules** - содержит данные о распределении задач по дням (зависят от задачи)
+При старте приложения `database.EnsureSchema()` дополнительно идемпотентно создаёт/обновляет `google_calendar_events` (колонка `source`, индексы).
 
-Это позволяет:
-- Избежать дублирования данных
-- Легко обновлять информацию
-- Поддерживать целостность данных
+### Порядок создания таблиц
 
----
+```
+users
+ ├── tasks
+ │    └── task_schedules
+ ├── user_google_tokens
+ └── google_calendar_events ──→ tasks (optional FK)
+```
 
-## 🔧 Миграции и обслуживание
+### Порядок удаления (обратный)
 
-### Создание таблиц
-Таблицы создаются в правильном порядке с учётом зависимостей:
-1. `users` (независимая)
-2. `tasks` (зависит от users)
-3. `task_schedules` (зависит от tasks)
-
-### Удаление таблиц
-При необходимости удалять в обратном порядке:
 ```sql
+DROP TABLE IF EXISTS google_calendar_events CASCADE;
+DROP TABLE IF EXISTS user_google_tokens CASCADE;
 DROP TABLE IF EXISTS task_schedules CASCADE;
 DROP TABLE IF EXISTS tasks CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 ```
 
-### Очистка старых данных
-```sql
--- Удалить завершённые задачи старше 6 месяцев
-DELETE FROM tasks 
-WHERE status = 'completed' 
-  AND completed_at < CURRENT_TIMESTAMP - INTERVAL '6 months';
+---
 
--- Удалить расписания старше 1 года
-DELETE FROM task_schedules 
-WHERE scheduled_date < CURRENT_DATE - INTERVAL '1 year';
-```
+## Нормализация
+
+Схема соответствует **3NF**:
+
+- **users** — профиль и настройки планирования
+- **tasks** — сущность «задача»
+- **task_schedules** — распределение задачи по дням (отдельная сущность, 1:N)
+- **user_google_tokens** — секреты OAuth вынесены из `users`
+- **google_calendar_events** — связь с внешней системой (Google), не дублирует данные задачи
+
+Денормализация намеренно отсутствует: `google_calendar_events` хранит только ID события и временной интервал, заголовок берётся из `tasks` через JOIN.
 
 ---
 
-## 📊 Размер и производительность
+## Оценка объёма (1000 пользователей)
 
-### Оценка размера данных
+| Таблица | Строк (оценка) | Размер |
+|---------|----------------|--------|
+| `users` | 1 000 | ~300 КБ |
+| `tasks` | ~10 000 | ~5 МБ |
+| `task_schedules` | ~30 000 | ~3 МБ |
+| `user_google_tokens` | ~200 | ~100 КБ |
+| `google_calendar_events` | ~15 000 | ~2 МБ |
 
-**Для 1000 пользователей**:
-- `users`: ~1000 строк × ~200 байт = ~200 КБ
-- `tasks`: ~10 задач на пользователя = 10,000 строк × ~500 байт = ~5 МБ
-- `task_schedules`: ~3 записи на задачу = 30,000 строк × ~100 байт = ~3 МБ
-
-**Итого**: ~8 МБ для 1000 активных пользователей
-
-### Индексы для производительности
-
-Все критичные поля проиндексированы:
-- Поиск пользователя по `telegram_id`: O(log n)
-- Получение задач пользователя: O(log n)
-- Фильтрация по статусу: O(log n)
-- Получение расписания на дату: O(log n)
+**Итого:** ~10 МБ для 1000 активных пользователей (без учёта индексов и TOAST).
 
 ---
 
-## 🎯 Заключение
+## Файлы схемы в репозитории
 
-Схема базы данных PlanBot:
-- ✅ Нормализована (3NF)
-- ✅ Имеет явные внешние ключи (FOREIGN KEY)
-- ✅ Защищена ограничениями целостности
-- ✅ Оптимизирована индексами
-- ✅ Поддерживает каскадное удаление
-- ✅ Легко масштабируется
+| Файл | Назначение |
+|------|------------|
+| `database/schema.sql` | Полная схема для нового развёртывания |
+| `database/migrations.sql` | Инкрементальные миграции для апгрейда |
+| `database/migrate.go` | Runtime ensure при старте бота |
+| `database/queries.go` | CRUD задач и пользователей |
+| `database/queries_calendar.go` | Google Calendar: busy, import, export |
 
-Связи между таблицами чётко определены и будут корректно отображаться в любых визуализаторах схем БД (dbdiagram.io, DBeaver, pgAdmin и др.).
+---
 
+## Визуализаторы
+
+Схему можно открыть в:
+
+- **GitHub / GitLab** — Mermaid ER-диаграмма рендерится из этого файла
+- **[dbdiagram.io](https://dbdiagram.io)** — вставить блок DBML выше
+- **DBeaver / pgAdmin / Adminer** — reverse engineering из живой БД (`http://localhost:8081` в dev-профиле Docker)
