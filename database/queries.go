@@ -19,12 +19,13 @@ func GetOrCreateUser(telegramID int64, username, firstName, lastName string) (*m
 			  FROM users WHERE telegram_id = $1`
 
 	var workDays pq.Int64Array
+	var username, fName, lName sql.NullString
 	err := DB.QueryRow(query, telegramID).Scan(
 		&user.ID,
 		&user.TelegramID,
-		&user.Username,
-		&user.FirstName,
-		&user.LastName,
+		&username,
+		&fName,
+		&lName,
 		&user.TimeZone,
 		&user.WorkStart,
 		&user.WorkEnd,
@@ -43,9 +44,9 @@ func GetOrCreateUser(telegramID int64, username, firstName, lastName string) (*m
 		err = DB.QueryRow(insertQuery, telegramID, username, firstName, lastName).Scan(
 			&user.ID,
 			&user.TelegramID,
-			&user.Username,
-			&user.FirstName,
-			&user.LastName,
+			&username,
+			&fName,
+			&lName,
 			&user.TimeZone,
 			&user.WorkStart,
 			&user.WorkEnd,
@@ -60,6 +61,10 @@ func GetOrCreateUser(telegramID int64, username, firstName, lastName string) (*m
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to query user: %w", err)
 	}
+
+	user.Username = username.String
+	user.FirstName = fName.String
+	user.LastName = lName.String
 
 	// Convert pq.Int64Array to []int
 	user.WorkDays = make([]int, len(workDays))
@@ -139,11 +144,12 @@ func GetUserTasks(userID int64) ([]models.Task, error) {
 	tasks := []models.Task{}
 	for rows.Next() {
 		task := models.Task{}
+		var desc sql.NullString
 		err := rows.Scan(
 			&task.ID,
 			&task.UserID,
 			&task.Title,
-			&task.Description,
+			&desc,
 			&task.HoursRequired,
 			&task.Priority,
 			&task.Status,
@@ -152,6 +158,7 @@ func GetUserTasks(userID int64) ([]models.Task, error) {
 			&task.UpdatedAt,
 			&task.CompletedAt,
 		)
+		task.Description = desc.String
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan task: %w", err)
 		}
@@ -177,11 +184,12 @@ func GetPendingTasks(userID int64) ([]models.Task, error) {
 	tasks := []models.Task{}
 	for rows.Next() {
 		task := models.Task{}
+		var desc sql.NullString
 		err := rows.Scan(
 			&task.ID,
 			&task.UserID,
 			&task.Title,
-			&task.Description,
+			&desc,
 			&task.HoursRequired,
 			&task.Priority,
 			&task.Status,
@@ -190,6 +198,7 @@ func GetPendingTasks(userID int64) ([]models.Task, error) {
 			&task.UpdatedAt,
 			&task.CompletedAt,
 		)
+		task.Description = desc.String
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan task: %w", err)
 		}
@@ -219,11 +228,12 @@ func GetActiveTasks(userID int64) ([]models.Task, error) {
 	tasks := []models.Task{}
 	for rows.Next() {
 		task := models.Task{}
+		var desc sql.NullString
 		err := rows.Scan(
 			&task.ID,
 			&task.UserID,
 			&task.Title,
-			&task.Description,
+			&desc,
 			&task.HoursRequired,
 			&task.Priority,
 			&task.Status,
@@ -232,6 +242,7 @@ func GetActiveTasks(userID int64) ([]models.Task, error) {
 			&task.UpdatedAt,
 			&task.CompletedAt,
 		)
+		task.Description = desc.String
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan active task: %w", err)
 		}

@@ -3,33 +3,23 @@ package notifications
 import (
 	"fmt"
 	"log"
-	"sync"
 	"time"
 
 	"github.com/adkhorst/planbot/database"
+	"github.com/adkhorst/planbot/models"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-// Reminder - структура для хранения информации о напоминании
-type Reminder struct {
-	TaskID   int64
-	UserID   int64
-	Title    string
-	Deadline time.Time
-	SentOnce bool // для однократного уведомления
-}
-
 var (
-	mu       sync.Mutex
 	bot      *tgbotapi.BotAPI
 	stopChan = make(chan bool)
 )
 
-// StartNotifications - запускает фоновую горутину, которая каждые 10 минут проверяет дедлайны
+// StartNotifications - запускает фоновую горутину, которая периодически проверяет дедлайны
 func StartNotifications(b *tgbotapi.BotAPI) {
 	bot = b
 	go func() {
-		ticker := time.NewTicker(10 * time.Minute) // проверять каждые 10 минут
+		ticker := time.NewTicker(30 * time.Minute) // Проверяем раз в полчаса
 		defer ticker.Stop()
 
 		for {
@@ -52,106 +42,145 @@ func StopNotifications() {
 
 // SendReminders - основная функция, которая проверяет задачи и отправляет уведомления
 func SendReminders() {
-	now := time.Now()
-
-	// 1. Задачи, дедлайн которых завтра
-	tomorrowStart := now.AddDate(0, 0, 1).Truncate(24 * time.Hour)
-	tomorrowEnd := tomorrowStart.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
-
-	soonTasks, err := getTasksByDeadlineRange(tomorrowStart, tomorrowEnd)
+	// Получаем всех пользователей, чтобы учитывать их таймзоны
+	users, err := getAllUsers()
 	if err != nil {
-		log.Printf("Error fetching tomorrow tasks: %v", err)
-	} else {
-		for _, t := range soonTasks {
-			sendNotification(t, fmt.Sprintf("⏰ Напоминаю: задача \"%s\" истекает завтра (%s)", t.Title, t.Deadline.Format("02.01.2006")))
+		log.Printf("Error fetching users for reminders: %v", err)
+		return
+	}
+
+	for _, user := range users {
+		sendUserReminders(user)
+	}
+}
+
+func sendUserReminders(user models.User) {
+	loc := time.UTC
+	if user.TimeZone != "" {
+		if l, err := time.LoadLocation(user.TimeZone); err == nil {
+			loc = l
 		}
 	}
 
-	// 2. Задачи, дедлайн которых сегодня, в 9:00
-	if now.Hour() == 9 && now.Minute() < 5 { // в течение первых 5 минут часа
-		todayStart := now.Truncate(24 * time.Hour)
-		todayEnd := todayStart.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+	now := time.Now().In(loc)
 
-		todayTasks, err := getTasksByDeadlineRange(todayStart, todayEnd)
-		if err != nil {
-			log.Printf("Error fetching today tasks: %v", err)
-		} else {
+	// 1. Задачи, дедлайн которых завтра
+	tomorrow := now.AddDate(0, 0, 1)
+	tomorrowStart := time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 0, 0, 0, 0, loc)
+	tomorrowEnd := tomorrowStart.Add(24 * time.Hour).Add(-time.Second)
+
+	// Use a small window to avoid duplicate notifications with the 30-min ticker
+	if now.Minute() >= 30 {
+		return
+	}
+
+	// 1. Задачи, дедлайн которых завтра
+	if now.Hour() == 9 {
+		tomorrow := now.AddDate(0, 0, 1)
+		tomorrowStart := time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 0, 0, 0, 0, loc)
+		tomorrowEnd := tomorrowStart.Add(24 * time.Hour).Add(-time.Second)
+
+		soonTasks, err := getTasksByDeadlineRange(user.ID, tomorrowStart, tomorrowEnd)
+		if err == nil {
+			for _, t := range soonTasks {
+				sendNotification(user.TelegramID, fmt.Sprintf("⏰ Напоминаю: задача \"%s\" истекает завтра (%s)", t.Title, t.Deadline.Format("02.01.2006")))
+			}
+		}
+
+		// 2. Задачи, дедлайн которых сегодня
+		todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+		todayEnd := todayStart.Add(24 * time.Hour).Add(-time.Second)
+
+		todayTasks, err := getTasksByDeadlineRange(user.ID, todayStart, todayEnd)
+		if err == nil {
 			for _, t := range todayTasks {
-				sendNotification(t, fmt.Sprintf("⚠️ Задача \"%s\" сегодня дедлайн! (%s)", t.Title, t.Deadline.Format("02.01.2006")))
+				sendNotification(user.TelegramID, fmt.Sprintf("⚠️ Задача \"%s\" сегодня дедлайн! (%s)", t.Title, t.Deadline.Format("02.01.2006")))
 			}
 		}
 	}
 
-	// 3. Просроченные задачи (не выполнены)
-	overdueTasks, err := getOverdueTasks()
-	if err != nil {
-		log.Printf("Error fetching overdue tasks: %v", err)
-	} else {
-		for _, t := range overdueTasks {
-			sendNotification(t, fmt.Sprintf("❌ Задача \"%s\" просрочена! (была до %s)", t.Title, t.Deadline.Format("02.01.2006")))
+	// 3. Просроченные задачи
+	if now.Hour() == 10 {
+		overdueTasks, err := getOverdueTasks(user.ID, now)
+		if err == nil {
+			for _, t := range overdueTasks {
+				sendNotification(user.TelegramID, fmt.Sprintf("❌ Задача \"%s\" просрочена! (была до %s)", t.Title, t.Deadline.Format("02.01.2006")))
+			}
 		}
 	}
 }
 
-// getTasksByDeadlineRange - возвращает задачи в диапазоне дат (от start до end), кроме выполненных
-func getTasksByDeadlineRange(start, end time.Time) ([]*database.Task, error) {
-	query := `
-		SELECT id, user_id, title, deadline
-		FROM tasks
-		WHERE deadline BETWEEN $1 AND $2 AND status != 'completed'
-		ORDER BY deadline ASC`
-
-	rows, err := database.DB.Query(query, start, end)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var tasks []*database.Task
-	for rows.Next() {
-		task := &database.Task{}
-		err := rows.Scan(&task.ID, &task.UserID, &task.Title, &task.Deadline)
-		if err != nil {
-			return nil, err
-		}
-		tasks = append(tasks, task)
-	}
-	return tasks, nil
-}
-
-// getOverdueTasks - возвращает просроченные задачи (дедлайн раньше текущего времени)
-func getOverdueTasks() ([]*database.Task, error) {
-	query := `
-		SELECT id, user_id, title, deadline
-		FROM tasks
-		WHERE deadline < CURRENT_TIMESTAMP AND status != 'completed'
-		ORDER BY deadline ASC`
-
+func getAllUsers() ([]models.User, error) {
+	query := `SELECT id, telegram_id, time_zone FROM users`
 	rows, err := database.DB.Query(query)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var tasks []*database.Task
+	var users []models.User
 	for rows.Next() {
-		task := &database.Task{}
-		err := rows.Scan(&task.ID, &task.UserID, &task.Title, &task.Deadline)
-		if err != nil {
-			return nil, err
+		var u models.User
+		if err := rows.Scan(&u.ID, &u.TelegramID, &u.TimeZone); err != nil {
+			continue
 		}
-		tasks = append(tasks, task)
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+func getTasksByDeadlineRange(userID int64, start, end time.Time) ([]models.Task, error) {
+	query := `
+		SELECT id, title, deadline
+		FROM tasks
+		WHERE user_id = $1 AND deadline BETWEEN $2 AND $3 AND status NOT IN ('completed', 'cancelled')
+		ORDER BY deadline ASC`
+
+	rows, err := database.DB.Query(query, userID, start, end)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []models.Task
+	for rows.Next() {
+		var t models.Task
+		if err := rows.Scan(&t.ID, &t.Title, &t.Deadline); err != nil {
+			continue
+		}
+		tasks = append(tasks, t)
 	}
 	return tasks, nil
 }
 
-// sendNotification - отправляет уведомление пользователю в Telegram
-func sendNotification(task *database.Task, message string) {
-	msg := tgbotapi.NewMessage(task.UserID, message)
+func getOverdueTasks(userID int64, now time.Time) ([]models.Task, error) {
+	query := `
+		SELECT id, title, deadline
+		FROM tasks
+		WHERE user_id = $1 AND deadline < $2 AND status NOT IN ('completed', 'cancelled')
+		ORDER BY deadline ASC`
+
+	rows, err := database.DB.Query(query, userID, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []models.Task
+	for rows.Next() {
+		var t models.Task
+		if err := rows.Scan(&t.ID, &t.Title, &t.Deadline); err != nil {
+			continue
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks, nil
+}
+
+func sendNotification(telegramID int64, message string) {
+	msg := tgbotapi.NewMessage(telegramID, message)
 	_, err := bot.Send(msg)
 	if err != nil {
-		log.Printf("Error sending notification to user %d: %v", task.UserID, err)
-	} else {
-		log.Printf("Notification sent to user %d: %s", task.UserID, message)
+		log.Printf("Error sending notification to user %d: %v", telegramID, err)
 	}
 }

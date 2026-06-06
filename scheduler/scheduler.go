@@ -123,55 +123,105 @@ func (s *Scheduler) sortTasksByDeadlineAndPriority(tasks []models.Task) []models
 
 // scheduleTask attempts to schedule a single task
 func (s *Scheduler) scheduleTask(task models.Task, startDate time.Time, daySlots map[string]*models.DaySchedule) bool {
-	remainingHours := task.HoursRequired
-	currentDate := s.normalizeDate(startDate)
+	normalizedStart := s.normalizeDate(startDate)
 
-	// Try to allocate hours across available days, but not beyond configured planning horizon.
-	// Primary strategy for tasks with дедлайном — начинать планирование как можно ближе к дедлайну
-	// (обратное планирование), но не раньше startDate / latestStartDate.
+	// Strategy:
+	// 1. If task has a deadline, try to schedule it as late as possible (backward planning)
+	//    but not earlier than startDate.
+	// 2. If no deadline, schedule as early as possible starting from startDate.
+
+	if task.Deadline != nil {
+		return s.scheduleTaskBackward(task, normalizedStart, daySlots)
+	}
+
+	return s.scheduleTaskForward(task, normalizedStart, daySlots)
+}
+
+func (s *Scheduler) scheduleTaskForward(task models.Task, startDate time.Time, daySlots map[string]*models.DaySchedule) bool {
+	remainingHours := task.HoursRequired
+	currentDate := startDate
 	maxDaysToCheck := s.planningHorizonDays
 	daysChecked := 0
 
-	// If we have a deadline, we could in будущем использовать latestStartDate,
-	// но сейчас просто идём вперёд от currentDate и проверяем дедлайн по условию ниже.
-
 	for remainingHours > 0 && daysChecked < maxDaysToCheck {
-		// Check if this day is a work day
 		if !s.isWorkDay(currentDate) {
 			currentDate = currentDate.AddDate(0, 0, 1)
 			daysChecked++
 			continue
 		}
 
-		// Check if we've exceeded the deadline
 		if task.Deadline != nil && currentDate.After(*task.Deadline) {
 			return false
 		}
 
-		// Get or create day slot
-		dateKey := s.formatDate(currentDate)
-		daySlot, exists := daySlots[dateKey]
-		if !exists {
-			daySlot = &models.DaySchedule{
-				Date:           currentDate,
-				Tasks:          []models.ScheduledTaskInfo{},
-				TotalHours:     0,
-				AvailableHours: s.user.DailyCapacity,
-			}
-			daySlots[dateKey] = daySlot
+		s.allocateToDay(task, currentDate, &remainingHours, daySlots)
+
+		if remainingHours <= 0 {
+			return true
 		}
 
-		// Calculate available hours for this day
-		availableHours := s.user.DailyCapacity - daySlot.TotalHours
+		currentDate = currentDate.AddDate(0, 0, 1)
+		daysChecked++
+	}
 
-		if availableHours > 0 {
-			// Allocate as much as possible to this day
-			hoursToAllocate := remainingHours
-			if hoursToAllocate > availableHours {
-				hoursToAllocate = availableHours
+	return remainingHours <= 0
+}
+
+func (s *Scheduler) scheduleTaskBackward(task models.Task, startDate time.Time, daySlots map[string]*models.DaySchedule) bool {
+	remainingHours := task.HoursRequired
+	deadline := s.normalizeDate(*task.Deadline)
+
+	// Start from deadline and move backwards to startDate
+	currentDate := deadline
+	if currentDate.Before(startDate) {
+		return false // Deadline already passed
+	}
+
+	// First pass: try to fit into existing free capacity moving backwards from deadline
+	for remainingHours > 0 && (currentDate.After(startDate) || currentDate.Equal(startDate)) {
+		if s.isWorkDay(currentDate) {
+			s.allocateToDay(task, currentDate, &remainingHours, daySlots)
+		}
+		currentDate = currentDate.AddDate(0, 0, -1)
+	}
+
+	// If still have remaining hours, it means we couldn't fit it between startDate and deadline
+	// with current load.
+	return remainingHours <= 0
+}
+
+func (s *Scheduler) allocateToDay(task models.Task, date time.Time, remainingHours *float64, daySlots map[string]*models.DaySchedule) {
+	dateKey := s.formatDate(date)
+	daySlot, exists := daySlots[dateKey]
+	if !exists {
+		daySlot = &models.DaySchedule{
+			Date:           date,
+			Tasks:          []models.ScheduledTaskInfo{},
+			TotalHours:     0,
+			AvailableHours: s.user.DailyCapacity,
+		}
+		daySlots[dateKey] = daySlot
+	}
+
+	availableHours := s.user.DailyCapacity - daySlot.TotalHours
+	if availableHours > 0 {
+		hoursToAllocate := *remainingHours
+		if hoursToAllocate > availableHours {
+			hoursToAllocate = availableHours
+		}
+
+		// Check if task already has allocation on this day (can happen in backward planning if we are not careful,
+		// but here we use it to append/merge)
+		found := false
+		for i := range daySlot.Tasks {
+			if daySlot.Tasks[i].TaskID == task.ID {
+				daySlot.Tasks[i].HoursAllocated += hoursToAllocate
+				found = true
+				break
 			}
+		}
 
-			// Add task to this day
+		if !found {
 			daySlot.Tasks = append(daySlot.Tasks, models.ScheduledTaskInfo{
 				TaskID:         task.ID,
 				Title:          task.Title,
@@ -179,17 +229,12 @@ func (s *Scheduler) scheduleTask(task models.Task, startDate time.Time, daySlots
 				Priority:       task.Priority,
 				Deadline:       task.Deadline,
 			})
-			daySlot.TotalHours += hoursToAllocate
-			daySlot.AvailableHours = s.user.DailyCapacity - daySlot.TotalHours
-
-			remainingHours -= hoursToAllocate
 		}
 
-		currentDate = currentDate.AddDate(0, 0, 1)
-		daysChecked++
+		daySlot.TotalHours += hoursToAllocate
+		daySlot.AvailableHours = s.user.DailyCapacity - daySlot.TotalHours
+		*remainingHours -= hoursToAllocate
 	}
-
-	return remainingHours == 0
 }
 
 // calculateLatestStartDate calculates the latest date a task can start

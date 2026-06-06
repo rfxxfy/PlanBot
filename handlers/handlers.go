@@ -323,6 +323,7 @@ func (h *BotHandler) handleSchedule(msg *tgbotapi.Message) {
 			now = now.In(loc)
 		}
 	}
+	// Start planning from tomorrow in user's timezone
 	startDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 1)
 	result := s.Schedule(startDate)
 
