@@ -29,19 +29,40 @@ type GoogleToken struct {
 	UpdatedAt    time.Time
 }
 
+// GoogleCalendarEvent tracks an exported Google Calendar event for later deletion/sync.
+type GoogleCalendarEvent struct {
+	ID            int64
+	UserID        int64
+	GoogleEventID string
+	TaskID        int64
+	Source        string // planbot, imported
+	StartTime     time.Time
+	EndTime       time.Time
+	CreatedAt     time.Time
+}
+
+// BusyInterval is a blocked time range (e.g. from Google Calendar).
+type BusyInterval struct {
+	Start    time.Time
+	End      time.Time
+	Summary  string
+	Source   string // "calendar", "external"
+	AllDay   bool
+}
+
 // Task represents a user's task
 type Task struct {
-	ID            int64      `json:"id"`
-	UserID        int64      `json:"user_id"`
-	Title         string     `json:"title"`
-	Description   string     `json:"description"`
-	HoursRequired float64    `json:"hours_required"`
-	Priority      int        `json:"priority"`
-	Status        string     `json:"status"` // pending, scheduled, in_progress, completed, cancelled
-	Deadline      *time.Time `json:"deadline,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
-	CompletedAt   *time.Time `json:"completed_at,omitempty"`
+	ID            int64
+	UserID        int64
+	Title         string
+	Description   string
+	HoursRequired float64
+	Priority      int
+	Status        string // pending, scheduled, in_progress, completed, cancelled
+	Deadline      *time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	CompletedAt   *time.Time
 }
 
 // TaskSchedule represents when a task is scheduled
@@ -84,8 +105,18 @@ type ScheduleResult struct {
 	UnscheduledTasks []int64 // IDs of tasks that couldn't be scheduled
 }
 
+// SlotAllocation is a concrete time block assigned to a task (for calendar export and display).
+type SlotAllocation struct {
+	TaskID   int64
+	Title    string
+	Priority int
+	Deadline *time.Time
+	Start    time.Time
+	End      time.Time
+}
+
 // TimeSlot represents a concrete time interval inside a day
-// used for future fine-grained scheduling (by time of day).
+// used for fine-grained scheduling (by time of day).
 type TimeSlot struct {
 	UserID         int64
 	Date           time.Time // calendar date in user's time zone
@@ -94,5 +125,5 @@ type TimeSlot struct {
 	CapacityHours  float64   // total capacity of this slot (usually 1.0 for 60 minutes)
 	AllocatedHours float64   // how many hours are already allocated
 	TaskID         *int64    // optional: ID of the task occupying this slot
-	Source         string    // e.g. "task", "external", "blocked", ""
+	Source         string    // e.g. "task", "calendar", "blocked", ""
 }

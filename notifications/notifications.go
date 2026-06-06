@@ -64,11 +64,6 @@ func sendUserReminders(user models.User) {
 
 	now := time.Now().In(loc)
 
-	// 1. Задачи, дедлайн которых завтра
-	tomorrow := now.AddDate(0, 0, 1)
-	tomorrowStart := time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 0, 0, 0, 0, loc)
-	tomorrowEnd := tomorrowStart.Add(24 * time.Hour).Add(-time.Second)
-
 	// Use a small window to avoid duplicate notifications with the 30-min ticker
 	if now.Minute() >= 30 {
 		return

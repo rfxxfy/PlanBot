@@ -36,6 +36,11 @@ func InitDB() error {
 	}
 
 	log.Println("Successfully connected to PostgreSQL database")
+
+	if err := EnsureSchema(); err != nil {
+		return fmt.Errorf("schema ensure: %w", err)
+	}
+
 	return nil
 }
 

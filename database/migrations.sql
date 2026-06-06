@@ -89,3 +89,25 @@ CREATE TABLE IF NOT EXISTS user_google_tokens (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS google_calendar_events (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    google_event_id VARCHAR(255) NOT NULL,
+    task_id BIGINT REFERENCES tasks(id) ON DELETE SET NULL,
+    source VARCHAR(50) NOT NULL DEFAULT 'planbot',
+    start_time TIMESTAMP NOT NULL,
+    end_time TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_google_calendar_events_user_id ON google_calendar_events(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_google_calendar_events_user_event ON google_calendar_events(user_id, google_event_id);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='google_calendar_events' AND column_name='source') THEN
+        ALTER TABLE google_calendar_events ADD COLUMN source VARCHAR(50) NOT NULL DEFAULT 'planbot';
+    END IF;
+END $$;

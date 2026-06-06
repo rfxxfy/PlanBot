@@ -53,7 +53,7 @@ func main() {
 	bot.Debug = os.Getenv("BOT_DEBUG") == "true"
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
-	// Initialize handlers
+	// Create bot handler
 	handler := handlers.NewBotHandler(bot)
 
 	// Start notifications

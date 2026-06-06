@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -85,6 +84,8 @@ func (h *BotHandler) handleCommand(msg *tgbotapi.Message) {
 		h.handleGoogleCode(msg)
 	case "google_status":
 		h.handleGoogleStatus(msg)
+	case "calendar_import":
+		h.handleCalendarImport(msg)
 	default:
 		h.sendMessage(msg.Chat.ID, "Неизвестная команда. Используйте /help")
 	}
@@ -103,11 +104,29 @@ func (h *BotHandler) handleCallback(cb *tgbotapi.CallbackQuery) {
 		return
 	}
 
-	switch cb.Data {
-	case "view_today":
+	switch {
+	case cb.Data == "view_today":
 		h.sendTodaySchedule(chatID, user)
-	case "view_week":
+	case cb.Data == "view_week":
 		h.sendWeekSchedule(chatID, user)
+	case strings.HasPrefix(cb.Data, "plan_insert:"):
+		taskID, err := parseCallbackTaskID(cb.Data, "plan_insert:")
+		if err != nil {
+			h.sendMessage(chatID, "Неверный запрос.")
+			return
+		}
+		h.sendMessage(chatID, "🔄 Вписываю задачу в текущее расписание...")
+		h.executeInsertTask(chatID, user, taskID)
+	case strings.HasPrefix(cb.Data, "plan_rebuild:"):
+		_, err := parseCallbackTaskID(cb.Data, "plan_rebuild:")
+		if err != nil {
+			h.sendMessage(chatID, "Неверный запрос.")
+			return
+		}
+		h.sendMessage(chatID, "🔄 Перепланирую все задачи с нуля...")
+		h.executeFullRebuild(chatID, user)
+	case strings.HasPrefix(cb.Data, "plan_skip:"):
+		h.sendMessage(chatID, "Хорошо. Запланировать позже: /schedule или кнопки после следующей задачи.")
 	default:
 		h.sendMessage(chatID, "Неизвестное действие.")
 	}
@@ -154,10 +173,10 @@ func (h *BotHandler) handleHelp(msg *tgbotapi.Message) {
 /addtask Прочитать статью | 1.5 | 3
 
 /mytasks - Показать все задачи
-/schedule - Автоматически распланировать задачи по дням
+/schedule - Перепланировать все активные задачи с нуля
 /today - Показать расписание на сегодня
 /week - Показать расписание на неделю
-/schedule_slots - Экспериментальное планирование по временным слотам
+/schedule_slots - Предпросмотр расписания по временным слотам (без записи в БД)
 /complete [ID] - Отметить задачу выполненной (по ID из /mytasks)
 /delete [ID] - Удалить задачу
 /settings - Настройки (часы в день, рабочие дни)
@@ -165,11 +184,14 @@ func (h *BotHandler) handleHelp(msg *tgbotapi.Message) {
 /google_connect - Подключить Google Calendar (OAuth)
 /google_code [код] - Завершить подключение Google Calendar
 /google_status - Статус подключения Google Calendar
+/calendar_import [дней] - Импортировать события из календаря в задачи бота
 
 💡 Советы:
 • Приоритет: целое число от 1 до 10 (10 = самый важный)
 • Дедлайн необязателен
-• Задачи автоматически распределяются по рабочим дням с учётом ваших настроек`
+• После /addtask можно вписать задачу в расписание или перепланировать всё
+• При подключённом Google Calendar учитываются все события в календаре (в т.ч. вручную и от PlanBot)
+• Google Calendar обновляется при планировании (старые события PlanBot заменяются)`
 
 	h.sendMessage(msg.Chat.ID, helpText)
 }
@@ -252,9 +274,15 @@ func (h *BotHandler) handleAddTask(msg *tgbotapi.Message) {
 		response += fmt.Sprintf("\n📅 Дедлайн: %s", task.Deadline.Format("02.01.2006"))
 	}
 
-	response += "\n\nИспользуйте /schedule для планирования"
+	hasExisting, err := database.UserHasScheduledTasks(user.ID)
+	if err != nil {
+		log.Printf("Error checking existing schedule: %v", err)
+		hasExisting = false
+	}
 
-	h.sendMessage(msg.Chat.ID, response)
+	response += "\n\nКак запланировать эту задачу?"
+	keyboard := planChoiceKeyboard(task.ID, hasExisting)
+	h.sendMessageWithReplyMarkup(msg.Chat.ID, response, &keyboard)
 }
 
 // handleMyTasks handles /mytasks command
@@ -292,7 +320,7 @@ func (h *BotHandler) handleMyTasks(msg *tgbotapi.Message) {
 	h.sendMessage(msg.Chat.ID, response)
 }
 
-// handleSchedule handles /schedule command
+// handleSchedule handles /schedule command (full rebuild of all active tasks).
 func (h *BotHandler) handleSchedule(msg *tgbotapi.Message) {
 	user, err := h.getUser(msg.From.ID)
 	if err != nil {
@@ -300,115 +328,11 @@ func (h *BotHandler) handleSchedule(msg *tgbotapi.Message) {
 		return
 	}
 
-	// Hard rescheduling: plan for ALL active tasks (pending + already scheduled, etc.)
-	tasks, err := database.GetActiveTasks(user.ID)
-	if err != nil {
-		log.Printf("Error getting active tasks: %v", err)
-		h.sendMessage(msg.Chat.ID, "Ошибка получения задач из базы.\nПопробуйте позже.")
-		return
-	}
-
-	if len(tasks) == 0 {
-		h.sendMessage(msg.Chat.ID, "Нет активных задач для планирования.\nДобавьте новую задачу через /addtask.")
-		return
-	}
-
-	h.sendMessage(msg.Chat.ID, "🔄 Планирую задачи...")
-
-	// Run scheduler starting from tomorrow (планируем всегда с завтрашнего дня)
-	s := scheduler.NewScheduler(user, tasks)
-	now := time.Now()
-	if user.TimeZone != "" {
-		if loc, err := time.LoadLocation(user.TimeZone); err == nil {
-			now = now.In(loc)
-		}
-	}
-	// Start planning from tomorrow in user's timezone
-	startDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 1)
-	result := s.Schedule(startDate)
-
-	// Clear old schedules for these tasks
-	taskIDs := make([]int64, len(tasks))
-	for i, task := range tasks {
-		taskIDs[i] = task.ID
-	}
-	database.ClearTaskSchedules(taskIDs)
-
-	// Save new schedules
-	if len(result.DaySchedules) > 0 {
-		err = database.SaveTaskSchedules(result.DaySchedules)
-		if err != nil {
-			log.Printf("Error saving schedules: %v", err)
-			h.sendMessage(msg.Chat.ID, "Ошибка сохранения расписания")
-			return
-		}
-	}
-
-	// Ensure task statuses are consistent after "hard" reschedule:
-	// - scheduled tasks stay/switch to 'scheduled' (SaveTaskSchedules does that)
-	// - unscheduled tasks should return to 'pending' (they may previously be 'scheduled')
-	for _, unscheduledID := range result.UnscheduledTasks {
-		_ = database.UpdateTaskStatus(unscheduledID, "pending")
-	}
-
-	// Optional: export schedule to Google Calendar.
-	if len(result.DaySchedules) > 0 {
-		ctx := context.Background()
-
-		// Используем только токен из БД (Google OAuth).
-		if storedTok, err := database.GetGoogleToken(user.ID); err != nil {
-			log.Printf("Error getting Google token from DB: %v", err)
-		} else if storedTok != nil {
-			cfg, err := googlecal.ConfigFromEnv()
-			if err != nil {
-				log.Printf("Error creating Google OAuth config: %v", err)
-			} else {
-				client, err := googlecal.NewWithStoredToken(ctx, cfg, storedTok, func(t *oauth2.Token) error {
-					return database.SaveGoogleToken(user.ID, t)
-				})
-				if err != nil {
-					log.Printf("Error creating Google Calendar client with stored token: %v", err)
-				} else {
-					if err := client.ExportDaySchedules(ctx, "primary", user, result.DaySchedules); err != nil {
-						log.Printf("Error exporting schedule to Google Calendar (stored token): %v", err)
-					}
-				}
-			}
-		}
-	}
-
-	// Format response
-	scheduledTasksCount := len(tasks) - len(result.UnscheduledTasks)
-	response := "✅ Планирование завершено.\n\n"
-	response += fmt.Sprintf("📊 Результат: %s\n", result.Message)
-	response += fmt.Sprintf("📌 Запланировано задач: %d из %d\n", scheduledTasksCount, len(tasks))
-
-	if len(result.DaySchedules) > 0 {
-		response += "📅 Расписание:\n\n"
-		for i, daySchedule := range result.DaySchedules {
-			if i >= 7 { // Show only first week
-				response += fmt.Sprintf("\n... и ещё %d дней", len(result.DaySchedules)-7)
-				break
-			}
-			response += formatDaySchedule(daySchedule, user.DailyCapacity)
-		}
-	}
-
-	if len(result.UnscheduledTasks) > 0 {
-		response += fmt.Sprintf("\n\n⚠️ Не удалось запланировать %d задач(и)", len(result.UnscheduledTasks))
-	}
-
-	// Кнопки быстрого просмотра расписания (inline)
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("📅 Сегодня", "view_today"),
-			tgbotapi.NewInlineKeyboardButtonData("📆 Неделя", "view_week"),
-		),
-	)
-	h.sendMessageWithReplyMarkup(msg.Chat.ID, response, &keyboard)
+	h.sendMessage(msg.Chat.ID, "🔄 Перепланирую все задачи с нуля...")
+	h.executeFullRebuild(msg.Chat.ID, user)
 }
 
-// handleScheduleSlots handles /schedule_slots command (experimental slot-based planning, no DB writes)
+// handleScheduleSlots handles /schedule_slots command (preview slot-based plan, no DB writes)
 func (h *BotHandler) handleScheduleSlots(msg *tgbotapi.Message) {
 	user, err := h.getUser(msg.From.ID)
 	if err != nil {
@@ -416,7 +340,6 @@ func (h *BotHandler) handleScheduleSlots(msg *tgbotapi.Message) {
 		return
 	}
 
-	// Show slot preview for the same set as /schedule hard rescheduling.
 	tasks, err := database.GetActiveTasks(user.ID)
 	if err != nil {
 		log.Printf("Error getting active tasks: %v", err)
@@ -429,169 +352,35 @@ func (h *BotHandler) handleScheduleSlots(msg *tgbotapi.Message) {
 		return
 	}
 
-	h.sendMessage(msg.Chat.ID, "🧪 Экспериментальное планирование по временным слотам...\n(данные в БД не изменяются)")
+	h.sendMessage(msg.Chat.ID, "🧪 Предпросмотр планирования по временным слотам...\n(данные в БД не изменяются)")
 
-	// Используем тот же планировщик, что и /schedule, чтобы результат по дням совпадал.
-	s := scheduler.NewScheduler(user, tasks)
-	now := time.Now()
-	if user.TimeZone != "" {
-		if loc, err := time.LoadLocation(user.TimeZone); err == nil {
-			now = now.In(loc)
-		}
-	}
-	startDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 1)
-	planResult := s.Schedule(startDate)
+	startDate := scheduleStartDate(user)
+	busy := h.fetchCalendarBusy(user, startDate, false)
+	workSlots := scheduler.BuildWorkSlots(user, startDate, busy)
+	planResult := scheduler.NewSchedulerWithSlots(user, tasks, workSlots).Schedule(startDate)
 
 	if len(planResult.DaySchedules) == 0 {
 		h.sendMessage(msg.Chat.ID, "🔎 Нет расписания для отображения по слотам. Сначала добавьте задачи.")
 		return
 	}
 
-	// Генерируем слоты и равномерно раскладываем внутри рабочего дня уже запланированные часы.
-	slotScheduler := scheduler.NewSlotScheduler(user)
-	slots := slotScheduler.BuildDailySlots(startDate)
-
-	// Индекс слотов по дате
-	slotsByDate := make(map[string][]*models.TimeSlot)
-	for i := range slots {
-		key := slots[i].Date.Format("2006-01-02")
-		s := &slots[i]
-		slotsByDate[key] = append(slotsByDate[key], s)
-	}
-
-	// Для каждого дня из плана равномерно заполняем слоты задачами этого дня.
-	for _, day := range planResult.DaySchedules {
-		dateKey := day.Date.Format("2006-01-02")
-		daySlots := slotsByDate[dateKey]
-		if len(daySlots) == 0 {
-			continue
-		}
-
-		// Последовательно проходим задачи этого дня и распределяем их часы по доступным слотам.
-		slotIdx := 0
-		for _, t := range day.Tasks {
-			remaining := t.HoursAllocated
-			for remaining > 0 && slotIdx < len(daySlots) {
-				slot := daySlots[slotIdx]
-				free := slot.CapacityHours - slot.AllocatedHours
-				if free <= 0 {
-					slotIdx++
-					continue
-				}
-
-				toAllocate := remaining
-				if toAllocate > free {
-					toAllocate = free
-				}
-
-				slot.AllocatedHours += toAllocate
-				if toAllocate > 0 {
-					idCopy := t.TaskID
-					slot.TaskID = &idCopy
-					if slot.Source == "" {
-						slot.Source = "task"
-					}
-				}
-
-				remaining -= toAllocate
-				if slot.AllocatedHours >= slot.CapacityHours {
-					slotIdx++
-				}
-			}
-		}
-	}
-
-	// Теперь у нас есть заполненные слоты, сворачиваем их обратно в DaySchedule только для показа.
-	type aggTask struct {
-		info models.ScheduledTaskInfo
-	}
-
-	dayAgg := make(map[string]models.DaySchedule)
-
-	for _, slot := range slots {
-		if slot.TaskID == nil || slot.AllocatedHours <= 0 {
-			continue
-		}
-
-		dateKey := slot.Date.Format("2006-01-02")
-		ds, exists := dayAgg[dateKey]
-		if !exists {
-			ds = models.DaySchedule{
-				Date:           slot.Date,
-				Tasks:          []models.ScheduledTaskInfo{},
-				TotalHours:     0,
-				AvailableHours: user.DailyCapacity,
-			}
-		}
-
-		// Ищем задачу в уже существующем списке
-		found := false
-		for i := range ds.Tasks {
-			if ds.Tasks[i].TaskID == *slot.TaskID {
-				ds.Tasks[i].HoursAllocated += slot.AllocatedHours
-				found = true
-				break
-			}
-		}
-		if !found {
-			// Берём базовую информацию из исходного плана
-			var baseInfo *models.ScheduledTaskInfo
-			for _, d := range planResult.DaySchedules {
-				if d.Date.Format("2006-01-02") != dateKey {
-					continue
-				}
-				for _, ti := range d.Tasks {
-					if ti.TaskID == *slot.TaskID {
-						copy := ti
-						baseInfo = &copy
-						break
-					}
-				}
-				if baseInfo != nil {
-					break
-				}
-			}
-			if baseInfo == nil {
-				// fallback: минимальная информация
-				baseInfo = &models.ScheduledTaskInfo{
-					TaskID: *slot.TaskID,
-				}
-			}
-			baseInfo.HoursAllocated = slot.AllocatedHours
-			ds.Tasks = append(ds.Tasks, *baseInfo)
-		}
-
-		ds.TotalHours += slot.AllocatedHours
-		dayAgg[dateKey] = ds
-	}
-
-	if len(dayAgg) == 0 {
-		h.sendMessage(msg.Chat.ID, "🔎 Слотный просмотр: нет слотов с задачами (возможно, все задачи с нулевой длительностью).")
+	timeAllocations := scheduler.PlanTimeAllocations(user, planResult.DaySchedules, startDate, busy)
+	if len(timeAllocations) == 0 {
+		h.sendMessage(msg.Chat.ID, "🔎 Не удалось разложить задачи по слотам.\nПроверьте рабочие часы (/settings) и рабочие дни.")
 		return
 	}
 
-	// Преобразуем в слайс и сортируем по дате
-	var daySchedules []models.DaySchedule
-	for _, ds := range dayAgg {
-		daySchedules = append(daySchedules, ds)
-	}
-	sort.Slice(daySchedules, func(i, j int) bool {
-		return daySchedules[i].Date.Before(daySchedules[j].Date)
-	})
-
-	// Формируем ответ
-	response := "🧪 Экспериментальное расписание по слотам (временные окна):\n\n"
-
+	response := "🧪 Расписание по временным слотам:\n\n"
 	maxDays := 7
-	for i, ds := range daySchedules {
+	for i, ds := range planResult.DaySchedules {
 		if i >= maxDays {
-			response += fmt.Sprintf("\n... и ещё %d дней", len(daySchedules)-maxDays)
+			response += fmt.Sprintf("\n... и ещё %d дней", len(planResult.DaySchedules)-maxDays)
 			break
 		}
-		response += formatDaySchedule(ds, user.DailyCapacity)
+		response += formatDayScheduleWithTimes(ds, user.DailyCapacity, timeAllocations)
 	}
 
-	response += "\n❗️ Это предварительный просмотр. Для записи расписания в БД используйте обычную команду /schedule."
+	response += "\n❗️ Это предварительный просмотр. Для записи в БД и Google Calendar используйте /schedule."
 
 	h.sendMessage(msg.Chat.ID, response)
 }
@@ -618,6 +407,12 @@ func (h *BotHandler) handleWeek(msg *tgbotapi.Message) {
 
 // handleComplete handles /complete command
 func (h *BotHandler) handleComplete(msg *tgbotapi.Message) {
+	user, err := h.getUser(msg.From.ID)
+	if err != nil {
+		h.sendMessage(msg.Chat.ID, "Ошибка получения пользователя")
+		return
+	}
+
 	args := msg.CommandArguments()
 	if args == "" {
 		h.sendMessage(msg.Chat.ID, "Укажите ID задачи: /complete [ID]")
@@ -630,6 +425,12 @@ func (h *BotHandler) handleComplete(msg *tgbotapi.Message) {
 		return
 	}
 
+	task, err := database.GetTaskByIDForUser(taskID, user.ID)
+	if err != nil || task == nil {
+		h.sendMessage(msg.Chat.ID, "Задача не найдена")
+		return
+	}
+
 	err = database.CompleteTask(taskID)
 	if err != nil {
 		log.Printf("Error completing task: %v", err)
@@ -637,11 +438,18 @@ func (h *BotHandler) handleComplete(msg *tgbotapi.Message) {
 		return
 	}
 
+	_ = h.syncTaskCompletionToCalendar(user.ID, taskID)
 	h.sendMessage(msg.Chat.ID, "✅ Задача отмечена как выполненная!")
 }
 
 // handleDelete handles /delete command
 func (h *BotHandler) handleDelete(msg *tgbotapi.Message) {
+	user, err := h.getUser(msg.From.ID)
+	if err != nil {
+		h.sendMessage(msg.Chat.ID, "Ошибка получения пользователя")
+		return
+	}
+
 	args := msg.CommandArguments()
 	if args == "" {
 		h.sendMessage(msg.Chat.ID, "Укажите ID задачи: /delete [ID]")
@@ -654,6 +462,14 @@ func (h *BotHandler) handleDelete(msg *tgbotapi.Message) {
 		return
 	}
 
+	task, err := database.GetTaskByIDForUser(taskID, user.ID)
+	if err != nil || task == nil {
+		h.sendMessage(msg.Chat.ID, "Задача не найдена")
+		return
+	}
+
+	_ = h.deleteTaskFromCalendar(user.ID, taskID)
+
 	err = database.DeleteTask(taskID)
 	if err != nil {
 		log.Printf("Error deleting task: %v", err)
@@ -661,6 +477,7 @@ func (h *BotHandler) handleDelete(msg *tgbotapi.Message) {
 		return
 	}
 
+	_ = database.DeleteTaskCalendarLinks(user.ID, taskID)
 	h.sendMessage(msg.Chat.ID, "🗑 Задача удалена")
 }
 
@@ -1009,7 +826,21 @@ func getStatusEmoji(status string) string {
 	}
 }
 
+func scheduleStartDate(user *models.User) time.Time {
+	now := time.Now()
+	if user.TimeZone != "" {
+		if loc, err := time.LoadLocation(user.TimeZone); err == nil {
+			now = now.In(loc)
+		}
+	}
+	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 1)
+}
+
 func formatDaySchedule(daySchedule models.DaySchedule, dailyCapacity float64) string {
+	return formatDayScheduleWithTimes(daySchedule, dailyCapacity, nil)
+}
+
+func formatDayScheduleWithTimes(daySchedule models.DaySchedule, dailyCapacity float64, allocations []models.SlotAllocation) string {
 	weekday := getWeekdayRu(daySchedule.Date.Weekday())
 	result := fmt.Sprintf("📆 %s, %s\n", weekday, daySchedule.Date.Format("02.01.2006"))
 	result += fmt.Sprintf("⏱ Нагрузка: %.1f / %.1f ч\n", daySchedule.TotalHours, dailyCapacity)
@@ -1020,12 +851,36 @@ func formatDaySchedule(daySchedule models.DaySchedule, dailyCapacity float64) st
 
 	result += "\n"
 
-	for _, task := range daySchedule.Tasks {
-		result += fmt.Sprintf("• %s (%.1f ч) ⭐️ %d\n", task.Title, task.HoursAllocated, task.Priority)
+	dayKey := daySchedule.Date.Format("2006-01-02")
+	dayAllocs := filterAllocationsByDate(allocations, dayKey)
+
+	if len(dayAllocs) > 0 {
+		for _, alloc := range dayAllocs {
+			hours := alloc.End.Sub(alloc.Start).Hours()
+			result += fmt.Sprintf("• %s — %s–%s (%.1f ч) ⭐️ %d\n",
+				alloc.Title, alloc.Start.Format("15:04"), alloc.End.Format("15:04"), hours, alloc.Priority)
+		}
+	} else {
+		for _, task := range daySchedule.Tasks {
+			result += fmt.Sprintf("• %s (%.1f ч) ⭐️ %d\n", task.Title, task.HoursAllocated, task.Priority)
+		}
 	}
 	result += "\n"
 
 	return result
+}
+
+func filterAllocationsByDate(allocations []models.SlotAllocation, dateKey string) []models.SlotAllocation {
+	if len(allocations) == 0 {
+		return nil
+	}
+	var filtered []models.SlotAllocation
+	for _, a := range allocations {
+		if a.Start.Format("2006-01-02") == dateKey {
+			filtered = append(filtered, a)
+		}
+	}
+	return filtered
 }
 
 func formatWorkDays(workDays []int) string {
@@ -1050,6 +905,11 @@ func getWeekdayRu(weekday time.Weekday) string {
 		time.Sunday:    "Воскресенье",
 	}
 	return days[weekday]
+}
+
+func parseCallbackTaskID(data, prefix string) (int64, error) {
+	idStr := strings.TrimPrefix(data, prefix)
+	return strconv.ParseInt(idStr, 10, 64)
 }
 
 func parseDate(dateStr string) (time.Time, error) {
