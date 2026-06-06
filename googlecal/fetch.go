@@ -38,7 +38,7 @@ func (c *Client) FetchBusyIntervals(ctx context.Context, calendarID string, user
 		return nil, fmt.Errorf("googlecal: list events: %w", err)
 	}
 
-	var busy []models.BusyInterval
+	busy := make([]models.BusyInterval, 0, len(events.Items))
 	for _, ev := range events.Items {
 		if ev.Status == "cancelled" {
 			continue

@@ -20,6 +20,7 @@ type User struct {
 	UpdatedAt     time.Time
 }
 
+// GoogleToken stores OAuth tokens for Google Calendar integration.
 type GoogleToken struct {
 	UserID       int64
 	AccessToken  string

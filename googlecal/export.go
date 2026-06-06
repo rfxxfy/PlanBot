@@ -24,7 +24,7 @@ func (c *Client) ExportSlotAllocations(ctx context.Context, calendarID string, u
 		tz = "Europe/Moscow"
 	}
 
-	var records []models.GoogleCalendarEvent
+	records := make([]models.GoogleCalendarEvent, 0, len(allocations))
 
 	for _, alloc := range allocations {
 		summary := alloc.Title

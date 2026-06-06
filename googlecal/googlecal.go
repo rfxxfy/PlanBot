@@ -17,6 +17,7 @@ var calendarScopes = []string{
 	calendar.CalendarScope,
 }
 
+// ConfigFromEnv builds OAuth2 config from GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.
 func ConfigFromEnv() (*oauth2.Config, error) {
 	clientID := os.Getenv("GOOGLE_CLIENT_ID")
 	clientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")

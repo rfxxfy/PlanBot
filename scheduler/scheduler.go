@@ -1,7 +1,6 @@
 package scheduler
 
 import (
-	"math"
 	"os"
 	"sort"
 	"strconv"
@@ -245,37 +244,6 @@ func (s *Scheduler) allocateToDay(task models.Task, date time.Time, remainingHou
 			*remainingHours -= hoursToAllocate
 		}
 	}
-}
-
-// calculateLatestStartDate calculates the latest date a task can start
-func (s *Scheduler) calculateLatestStartDate(deadline time.Time, hoursRequired float64) time.Time {
-	if s.user.DailyCapacity <= 0 {
-		return s.normalizeDate(deadline)
-	}
-
-	// Use ceiling to calculate exact number of required work days.
-	// Дедлайн считаем включительно, поэтому:
-	// - deadline сам считается рабочим днём №1 (если он рабочий),
-	// - затем двигаемся назад, пока не наберём нужное количество рабочих дней.
-	workDaysNeeded := int(math.Ceil(hoursRequired / s.user.DailyCapacity))
-	date := deadline
-
-	// Если дедлайн не рабочий день, отступаем назад до ближайшего рабочего.
-	for !s.isWorkDay(date) {
-		date = date.AddDate(0, 0, -1)
-	}
-
-	workDaysFound := 1
-
-	// Go backwards from adjusted deadline
-	for workDaysFound < workDaysNeeded {
-		date = date.AddDate(0, 0, -1)
-		if s.isWorkDay(date) {
-			workDaysFound++
-		}
-	}
-
-	return s.normalizeDate(date)
 }
 
 // isWorkDay checks if a date is a work day for the user

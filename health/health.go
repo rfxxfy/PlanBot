@@ -34,15 +34,22 @@ func NewServer(port, version string) *Server {
 
 // Start starts the health check HTTP server
 func (s *Server) Start() {
-	http.HandleFunc("/health", s.healthHandler)
-	http.HandleFunc("/ready", s.readyHandler)
-	http.HandleFunc("/", s.rootHandler)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", s.healthHandler)
+	mux.HandleFunc("/ready", s.readyHandler)
+	mux.HandleFunc("/", s.rootHandler)
 
 	addr := fmt.Sprintf(":%s", s.port)
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
 	log.Printf("Health check server starting on %s", addr)
 
 	go func() {
-		if err := http.ListenAndServe(addr, nil); err != nil {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Printf("Health check server error: %v", err)
 		}
 	}()

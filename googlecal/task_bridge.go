@@ -40,7 +40,7 @@ func (c *Client) ListImportableEvents(ctx context.Context, calendarID string, ti
 		return nil, fmt.Errorf("googlecal: list importable events: %w", err)
 	}
 
-	var out []CalendarImportItem
+	out := make([]CalendarImportItem, 0, len(events.Items))
 	for _, ev := range events.Items {
 		if ev.Status == "cancelled" || isPlanBotCalendarEvent(ev) {
 			continue
