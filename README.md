@@ -1,371 +1,270 @@
-# PlanBot - Telegram Task Planning Bot 📋
+# PlanBot
 
-Умный телеграм-бот для планирования задач с автоматическим распределением по дням на основе нагрузки, приоритетов и дедлайнов.
+**Умный Telegram-бот для планирования задач** — автоматически распределяет работу по дням и часам с учётом дедлайнов, приоритетов, рабочего графика и Google Calendar.
 
-## 🎯 Возможности
+<p align="center">
+  <img src="https://img.shields.io/badge/Go-1.25-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.25">
+  <img src="https://img.shields.io/badge/PostgreSQL-15-336791?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL 15">
+  <img src="https://img.shields.io/badge/Telegram-Bot-26A5E4?style=flat-square&logo=telegram&logoColor=white" alt="Telegram">
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker">
+</p>
 
-- **Умное планирование**: Автоматическое распределение задач по дням с учётом:
-  - Времени, необходимого на выполнение
-  - Приоритетов задач
-  - Жёстких дедлайнов
-  - Вашей дневной нагрузки
-  
-- **Гибкие настройки**:
-  - Настраиваемое количество рабочих часов в день
-  - Выбор рабочих дней недели
-  - Разделение задач на несколько дней при необходимости
+---
 
-- **Удобный интерфейс**:
-  - Простые команды для управления задачами
-  - Просмотр расписания на день/неделю
-  - Отслеживание статуса задач
+## Содержание
 
-## 🧠 Алгоритм планирования
+- [Возможности](#возможности)
+- [Быстрый старт](#быстрый-старт)
+- [Команды бота](#команды-бота)
+- [Google Calendar](#google-calendar)
+- [Переменные окружения](#переменные-окружения)
+- [Разработка](#разработка)
+- [Документация](#документация)
+- [Лицензия](#лицензия)
 
-Реализован **алгоритм с учётом дедлайнов** (Deadline-Aware Scheduling):
+---
 
-1. **Сортировка задач**:
-   - Сначала задачи с дедлайнами (по близости срока)
-   - Затем по приоритету (10 = максимальный)
-   - При равном приоритете - более короткие задачи
+## Возможности
 
-2. **Распределение**:
-   - Для задач с дедлайном: работает в обратном порядке от дедлайна
-   - Резервирует время заранее, чтобы уложиться в срок
-   - Разбивает большие задачи на несколько дней
-   - Учитывает рабочие/нерабочие дни
+| | |
+|---|---|
+| **Планирование** | Deadline-Aware алгоритм: задачи с дедлайном — «с конца», без дедлайна — с ближайшего дня |
+| **Слоты времени** | Рабочие часы (`09:00–18:00`), выходные, занятость из календаря |
+| **Google Calendar** | OAuth, экспорт расписания, импорт внешних событий в задачи |
+| **Два режима** | Вписать задачу в текущий план или перепланировать всё с нуля |
+| **Настройки** | Часы/день, рабочие дни, таймзона, начало и конец рабочего дня |
+| **Напоминания** | Уведомления о дедлайнах (завтра / сегодня в 09:00 по таймзоне пользователя) |
 
-3. **Оптимизация**:
-   - Не перегружает отдельные дни
-   - Использует доступные временные слоты
-   - Автоматическая перепланировка при добавлении новых задач
+```mermaid
+flowchart LR
+    TG[Telegram] --> BOT[PlanBot]
+    BOT --> SCH[scheduler]
+    BOT --> DB[(PostgreSQL)]
+    BOT --> GC[Google Calendar]
+    SCH --> DB
+```
 
-## 📋 Требования
+---
 
-- Go 1.21 или выше
-- PostgreSQL 12+
-- Telegram Bot Token (получить у [@BotFather](https://t.me/botfather))
+## Быстрый старт
 
-## 🚀 Установка и запуск
+### Требования
 
-### Вариант 1: Docker (Рекомендуется) 🐳
+- [Go 1.25+](https://go.dev/dl/) (для локальной разработки)
+- [Docker](https://www.docker.com/) и Docker Compose (рекомендуется)
+- [Telegram Bot Token](https://t.me/BotFather)
+- PostgreSQL 15 (входит в Docker Compose)
+
+### Docker (рекомендуется)
 
 ```bash
-# Клонируйте репозиторий
 git clone <your-repo-url>
 cd PlanBot
 
-# Скопируйте пример конфигурации
 cp env.example .env
+# Укажите TELEGRAM_BOT_TOKEN и при необходимости GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
 
-# Отредактируйте .env и добавьте токен бота
-nano .env
-
-# Запустите через Docker Compose
-docker-compose up -d
-
-# Просмотр логов
+docker-compose up -d --build
 docker-compose logs -f bot
-
-# Остановить
-docker-compose down
 ```
 
-### Вариант 2: Локальная установка
+**С Adminer** (веб-интерфейс к БД на http://localhost:8081):
 
-1. **Клонируйте репозиторий**:
 ```bash
-git clone <your-repo-url>
-cd PlanBot
+docker-compose --profile dev up -d
 ```
 
-2. **Создайте файл .env**:
+| Сервис | URL |
+|--------|-----|
+| Бот (health) | http://localhost:8080/health |
+| Adminer (dev) | http://localhost:8081 |
+| PostgreSQL | localhost:5432 |
+
+### Локально (без Docker)
+
 ```bash
 cp env.example .env
-# Отредактируйте .env и добавьте токен бота
-```
-
-3. **Используйте Makefile для быстрой настройки**:
-```bash
-# Установить зависимости
 make install
-
-# Создать базу данных
 make db-setup
-
-# Запустить бота
 make run
 ```
 
-Или вручную:
+---
 
-```bash
-# Создайте базу данных
-createdb planbot
-psql planbot < database/schema.sql
+## Команды бота
 
-# Установите зависимости
-go mod download
+### Старт
 
-# Запустите бота
-go run main.go
+| Команда | Описание |
+|---------|----------|
+| `/start` | Регистрация и приветствие |
+| `/help` | Полный список команд |
+
+### Задачи
+
+```text
+/addtask Название | часы | приоритет | дедлайн
 ```
 
-### Вариант 3: С использованием make (разработка)
+Минимум: `/addtask Задача | 2`
 
-```bash
-# Показать все команды
-make help
-
-# Запуск с hot reload (требуется air)
-make dev
-
-# Сборка бинарного файла
-make build
-
-# Запуск всех проверок
-make check
+```text
+/addtask Написать отчёт | 4 | 8 | 25.12.2025
+/addtask Прочитать статью | 1.5 | 3
 ```
 
-## 📱 Команды бота
+| Команда | Описание |
+|---------|----------|
+| `/mytasks` | Все задачи со статусами |
+| `/complete ID` | Отметить выполненной |
+| `/delete ID` | Удалить задачу |
 
-### Основные команды:
+После `/addtask` бот предложит **вписать в план**, **перепланировать всё** или пропустить.
 
-- `/start` - Начать работу с ботом
-- `/help` - Справка по командам
+### Планирование
 
-### Управление задачами:
+| Команда | Описание |
+|---------|----------|
+| `/schedule` | Полное перепланирование всех активных задач |
+| `/schedule_slots` | Предпросмотр слотов по времени (без записи в БД) |
+| `/today` | Расписание на сегодня |
+| `/week` | Расписание на неделю |
 
-- `/addtask` - Добавить новую задачу
-  ```
-  Формат: /addtask Название | часы | приоритет | дедлайн
-  Минимум: /addtask Задача | 2
-  Примеры:
-  /addtask Написать отчёт | 4 | 8 | 25.12.2025
-  /addtask Прочитать статью | 1.5 | 3
-  ```
+### Настройки
 
-- `/mytasks` - Показать все задачи
-- `/complete <ID>` - Отметить задачу как выполненную
-- `/delete <ID>` - Удалить задачу
-
-### Планирование:
-
-- `/schedule` - Автоматически распределить задачи по дням
-- `/today` - Показать расписание на сегодня
-- `/week` - Показать расписание на неделю
-
-### Настройки:
-
-- `/settings` - Показать текущие настройки
-- `/settings <часы> | <дни>` - Изменить настройки
-  ```
-  Пример: /settings 6 | 1,2,3,4,5
-  (6 часов в день, Пн-Пт)
-  
-  Дни: 1=Пн, 2=Вт, 3=Ср, 4=Чт, 5=Пт, 6=Сб, 7=Вс
-  ```
-
-## 💡 Примеры использования
-
-### Добавление задач:
-
-```
-/addtask Подготовить презентацию | 6 | 9 | 20.12.2025
-/addtask Изучить новый фреймворк | 10 | 5
-/addtask Написать тесты | 3 | 7 | 22.12.2025
-```
-
-### Настройка рабочего времени:
-
-```
+```text
 /settings 8 | 1,2,3,4,5
+/settings 6 | 1,2,3,4,5 | 09:00-18:00
+/timezone Europe/Moscow
 ```
-(8 часов в день, работа с понедельника по пятницу)
 
-## ⚙️ Переменные окружения
+Дни недели: `1` = Пн … `7` = Вс.
 
-Основные переменные:
+---
 
-- `TELEGRAM_BOT_TOKEN` — токен бота от [@BotFather](https://t.me/botfather).
-- `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSLMODE` — настройки подключения к PostgreSQL.
-- `HEALTH_PORT` — порт HTTP‑health‑сервера (по умолчанию `8080`).
-- `BOT_DEBUG` — логирование запросов Telegram (`true`/`false`).
-- `TZ` — таймзона контейнера (по умолчанию `Europe/Moscow`).
-- `PLANNING_HORIZON_DAYS` (опционально) — сколько дней вперёд планировщик может смотреть (по умолчанию 365).
+## Google Calendar
 
-### Планирование:
-
+```text
+/google_connect          # ссылка для OAuth
+/google_code ВАШ_КОД    # завершить подключение
+/google_status           # статус токена
+/calendar_import         # импорт событий (30 дней по умолчанию)
+/calendar_import 14      # импорт на 14 дней (макс. 180)
 ```
-/schedule
-```
-Бот автоматически распределит все задачи, учитывая дедлайны и приоритеты.
 
-## 🏗️ Структура проекта
+При `/schedule` расписание экспортируется в Google Calendar как timed-события. Внешние события календаря учитываются как занятость при планировании.
 
-```
+Для OAuth на сервере нужны `GOOGLE_CLIENT_ID` и `GOOGLE_CLIENT_SECRET` в `.env`.
+
+---
+
+## Переменные окружения
+
+| Переменная | Обязательно | Описание |
+|------------|-------------|----------|
+| `TELEGRAM_BOT_TOKEN` | да | Токен от @BotFather |
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | да | PostgreSQL |
+| `DB_SSLMODE` | нет | `disable` / `require` (default: `disable`) |
+| `HEALTH_PORT` | нет | HTTP health-сервер (default: `8080`) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | для Calendar | OAuth Google |
+| `PLANNING_HORIZON_DAYS` | нет | Горизонт планирования (default: `365`) |
+| `PLANNING_SLOT_MINUTES` | нет | Размер слота в минутах (default: `60`) |
+| `TZ` | нет | Таймзона контейнера (default: `Europe/Moscow`) |
+| `BOT_DEBUG` | нет | Логи Telegram API (`true`/`false`) |
+
+Полный пример — в [`env.example`](env.example).
+
+---
+
+## Разработка
+
+### Структура проекта
+
+```text
 PlanBot/
-├── main.go                     # Точка входа
+├── main.go
+├── handlers/          # Telegram: команды, callbacks, calendar
+├── scheduler/         # Алгоритм планирования + слоты
+├── database/          # PostgreSQL, schema, migrations
+├── googlecal/         # Google Calendar API
+├── notifications/     # Напоминания о дедлайнах
+├── health/            # /health, /ready
 ├── models/
-│   └── models.go              # Модели данных
-├── database/
-│   ├── db.go                  # Подключение к БД
-│   ├── queries.go             # CRUD операции
-│   ├── schema.sql             # SQL схема
-│   ├── migrations.sql         # Миграции БД
-│   └── test_data.sql          # Тестовые данные
-├── scheduler/
-│   └── scheduler.go           # Алгоритм планирования
-├── handlers/
-│   └── handlers.go            # Обработчики команд бота
-├── health/
-│   └── health.go              # Health check endpoints
-├── .github/
-│   └── workflows/             # CI/CD (GitHub Actions)
-│       ├── ci.yml
-│       └── release.yml
-├── scripts/
-│   └── backup.sh              # Скрипт резервного копирования
-├── Dockerfile                 # Docker образ
-├── docker-compose.yml         # Docker Compose для разработки
-├── docker-compose.prod.yml    # Docker Compose для production
-├── Makefile                   # Команды для разработки
-├── .golangci.yml             # Конфигурация линтера
-├── .air.toml                 # Конфигурация hot reload
-└── README.md
+├── docs/              # ARCHITECTURE, ALGORITHM, DATABASE_SCHEMA, presentation
+├── Dockerfile
+├── docker-compose.yml
+└── Makefile
 ```
 
-## 🔧 Технологии
-
-- **Go 1.21+** - Язык программирования
-- **PostgreSQL 15** - База данных
-- **telegram-bot-api** - Библиотека для работы с Telegram Bot API
-- **lib/pq** - PostgreSQL драйвер для Go
-- **Docker & Docker Compose** - Контейнеризация
-- **GitHub Actions** - CI/CD
-
-## 🛠️ Команды Makefile
+### Makefile
 
 ```bash
-make help           # Показать все команды
-make build          # Собрать бинарный файл
-make run            # Запустить локально
-make dev            # Запустить с hot reload
-make test           # Запустить тесты
-make docker-up      # Запустить в Docker
-make docker-down    # Остановить Docker контейнеры
-make db-setup       # Создать и настроить БД
-make lint           # Запустить линтер
-make fmt            # Форматировать код
+make help            # все команды
+make build           # собрать бинарник
+make run             # запустить локально
+make dev             # hot reload (air)
+make test            # go test ./...
+make lint            # golangci-lint
+make docker-up-dev   # Docker + Adminer
+make db-setup        # создать БД и схему
 ```
 
-## 🏥 Health Checks
+### Тесты
 
-Приложение предоставляет health check endpoints:
+```bash
+go test ./...
+```
 
-- `http://localhost:8080/health` - Проверка состояния (liveness)
-- `http://localhost:8080/ready` - Готовность к работе (readiness)
-- `http://localhost:8080/` - Информация о сервисе
+Покрытие: `scheduler`, `handlers`, `googlecal`, `health`, `database` (integration при наличии `DB_HOST`).
 
-Пример:
+### Health checks
+
 ```bash
 curl http://localhost:8080/health
+curl http://localhost:8080/ready
 ```
 
-Ответ:
-```json
-{
-  "status": "healthy",
-  "timestamp": "2025-12-19T10:30:00Z",
-  "version": "v1.0.0",
-  "database": "connected"
-}
-```
+### CI/CD
 
-## 🔄 CI/CD
-
-Проект включает GitHub Actions для:
-
-- **CI Pipeline** (`.github/workflows/ci.yml`):
-  - Линтинг кода
-  - Запуск тестов
-  - Сборка приложения
-  - Сборка Docker образа
-
-- **Release Pipeline** (`.github/workflows/release.yml`):
-  - Автоматическая сборка при создании тега
-  - Создание релизов с бинарными файлами для всех платформ
-  - Публикация Docker образа
-
-Создание релиза:
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-## 🐳 Docker
-
-### Development
-
-```bash
-# Запустить все сервисы (включая Adminer)
-docker-compose --profile dev up -d
-
-# Adminer доступен на http://localhost:8081
-```
+GitHub Actions: lint → тесты с PostgreSQL → сборка → Docker image. См. [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ### Production
 
 ```bash
-# Использовать production конфигурацию
 docker-compose -f docker-compose.prod.yml up -d
-
-# С мониторингом
-docker-compose -f docker-compose.prod.yml --profile monitoring up -d
-
-# С резервным копированием
-docker-compose -f docker-compose.prod.yml --profile backup up -d
 ```
 
-### Резервное копирование
+---
 
-```bash
-# Автоматическое (через Docker)
-docker-compose -f docker-compose.prod.yml --profile backup up -d
+## Документация
 
-# Ручное
-make db-backup  # или
-docker exec planbot-postgres pg_dump -U planbot planbot > backup.sql
-```
+| Файл | Описание |
+|------|----------|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Архитектура, потоки данных, пакеты |
+| [docs/ALGORITHM.md](docs/ALGORITHM.md) | Алгоритм планирования (полное описание) |
+| [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) | Схема БД, ER-диаграммы |
+| [docs/presentation.html](docs/presentation.html) | Презентация проекта (открыть в браузере) |
 
-## 📊 Схема базы данных
+---
 
-### Таблица users:
-- Хранит информацию о пользователях
-- Настройки: часы в день, рабочие дни
+## Алгоритм (кратко)
 
-### Таблица tasks:
-- Все задачи пользователей
-- Поля: название, часы, приоритет, дедлайн, статус
+**Deadline-Aware Hybrid Scheduling** · O(N × D)
 
-### Таблица task_schedules:
-- Распределение задач по дням
-- Связь: задача → дата → выделенные часы
+1. Сортировка: дедлайн → близость срока → приоритет → короткие задачи
+2. **С дедлайном** — планирование назад от срока
+3. **Без дедлайна** — вперёд от завтра
+4. Учёт `daily_capacity`, `work_days`, занятости Google Calendar
+5. `PlanTimeAllocations()` — привязка к конкретному времени в рабочих часах
 
-## ⚠️ Ограничения текущей версии
+Подробнее → [docs/ALGORITHM.md](docs/ALGORITHM.md)
 
-- Планирование выполняется **по дням** (без точных временных слотов внутри дня).
-- Интеграция с **Google Calendar** пока не реализована.
-- Нет учёта часового пояса пользователя и рабочих часов внутри дня — используется только дневная ёмкость (`часы в день`) и набор рабочих дней недели.
+---
 
-## 🤝 Вклад в проект
+## Вклад в проект
 
-Приветствуются любые улучшения! Создавайте issues и pull requests.
+Issues и pull requests приветствуются. Перед PR: `make test` и `make lint`.
 
-## 📝 Лицензия
+## Лицензия
 
-MIT License
-
-## 🎓 Автор
-
-Разработано с любовью к планированию и автоматизации 🚀
+[MIT License](LICENSE)
